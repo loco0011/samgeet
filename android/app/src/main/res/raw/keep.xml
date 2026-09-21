@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The audio plugin looks these icons up by name at runtime, so the release
+     resource shrinker can't tell they're used and would otherwise delete them
+     (which silently breaks the notification / lock-screen media controls). -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/audio_service_*,@drawable/ic_notification,@mipmap/ic_launcher,@drawable/ic_launcher_*" />
