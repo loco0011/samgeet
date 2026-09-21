@@ -11,15 +11,19 @@ on the server, which is git-ignored.
 
 1. **Create the table.** hPanel -> Databases -> phpMyAdmin -> open your database -> **SQL** tab ->
    paste `schema.sql` -> Go.
-2. **Upload the API.** hPanel -> Files -> File Manager -> `public_html`. Create the folders
-   `samgeet/api`, then upload `api/profile.php` and `api/.htaccess` into it.
+2. **Point a subdomain at the hosting.** The main site is on Netlify (no PHP), so the API lives on
+   its own subdomain, `api.sambitmaity.fun`: add an **A** record `api` -> the Hostinger server IP in
+   the domain's DNS, then add the subdomain in hPanel -> Domains -> Subdomains and enable its SSL.
+   Upload `api/profile.php` and `api/.htaccess` into that subdomain's folder.
 3. **Add the credentials.** Create `config.php` from `api/config.sample.php` and fill in your real
    database name, user and password (the host stays `localhost`). Best: save it as
    `samgeet_config.php` **outside** `public_html`, in the site's own folder (the one that contains
    `public_html`), so it can never be served. If you can't, put `config.php` next to `profile.php`;
    `.htaccess` blocks it.
-4. **Check it.** Open `https://sambitmaity.fun/samgeet/api/profile.php` in a browser. Seeing
-   `{"error":"post_only"}` means PHP is running and the route is right.
+4. **Check it.** Open `https://api.sambitmaity.fun/profile.php` in a browser. Seeing
+   `{"error":"post_only"}` means PHP is running and the route is right. (If a POST says
+   `not_configured`, `config.php` is missing; `db` means the credentials are wrong; `server` usually
+   means the tables from step 1 don't exist yet.)
 5. **Build the app** and sign in with a test profile. A new row should appear in the
    `profiles` table.
 

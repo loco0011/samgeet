@@ -13,7 +13,7 @@ import 'profile.dart';
 /// install can change or delete its own row. Failures are silent: the app works offline, and the
 /// change is retried the next time the app starts.
 class CloudService {
-  static const baseUrl = 'https://sambitmaity.fun/samgeet/api';
+  static const baseUrl = 'https://api.sambitmaity.fun';
   static const _keyPref = 'installKey';
   static const _savePending = 'cloudSavePending';
   static const _deletePending = 'cloudDeletePending';
