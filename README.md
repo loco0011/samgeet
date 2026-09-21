@@ -23,7 +23,7 @@ Sharing a song or playlist sends a link to a small page on `api.sambitmaity.fun`
 - Build APK: `flutter build apk --release` → `build/app/outputs/flutter-apk/app-release.apk`
 - Unit tests (offline): `flutter test`
 - Live server checks: `flutter test tool/live_api_check.dart`, `dart run tool/check_stream.dart`
-- Release signing: put your keystore details in `android/key.properties` (git-ignored). Without it the build falls back to the debug key, which is fine for testing but not for publishing.
+- Release signing: put your keystore details in `android/key.properties` (git-ignored). Without it the build falls back to the debug key, which is fine for testing but not for publishing. How to back the key up, restore it and publish a release: [`docs/Samgeet-Signing-Key-Backup-Guide.pdf`](docs/Samgeet-Signing-Key-Backup-Guide.pdf).
 
 ## Layout
 - `lib/data` — API client, models, library store (favourites/playlists/history), catalog of categories
