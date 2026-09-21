@@ -35,3 +35,15 @@ The app's API address is `CloudService.baseUrl` in `lib/data/cloud_service.dart`
 - Requests are limited to 60 per IP every 10 minutes (`api_hits` table); the app retries later.
 - The API only writes. It has no endpoint that returns anyone's profile.
 - Change the database password if it was ever shared outside hPanel.
+
+## Share page (`api/share.php`)
+The page a friend lands on when they open a shared song or playlist link: title, artist and cover art
+(or the playlist name and song count) plus a **Download Samgeet** button that points at the latest
+GitHub release. Upload it next to `profile.php`; it needs no database or config.
+
+- `https://api.sambitmaity.fun/share.php?t=song&s=Title&a=Artist&al=Album&i=<cover>`
+- `https://api.sambitmaity.fun/share.php?t=playlist&n=Name&c=12#p=<playlist code>`
+
+It hosts no music or audio. It shows only text carried in the link, escapes all of it, and embeds
+cover art only from `*.saavncdn.com`. The `#p=` code never reaches the server. If you rename the
+APK or move the repo, change `APK_URL` at the top of the file.

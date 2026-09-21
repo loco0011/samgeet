@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:share_plus/share_plus.dart';
 
+import 'cloud_service.dart';
 import 'library_store.dart';
 import 'track.dart';
 
@@ -24,25 +25,40 @@ class _CappedSink implements Sink<List<int>> {
 
 /// Sharing songs and playlists.
 ///
-/// Playlists are shared as readable text *plus* a compact code. Anyone with
-/// Samgeet can paste the message into "Import playlist" and get the same list.
+/// Songs and playlists are shared as a link to the landing page on Samgeet's server
+/// (`backend/api/share.php`): song/playlist info plus a "download the app" button. A playlist link
+/// also carries a compact code in its `#p=` fragment (the fragment never reaches the server), so
+/// anyone with Samgeet can paste the message into "Import playlist" and get the same list.
 class ShareService {
   static const _prefix = 'samgeet://p/';
   // Codes shared before the app was renamed still import.
   static const _legacyPrefix = 'sangeet://p/';
 
+  static const _pageUrl = '${CloudService.baseUrl}/share.php';
+
+  static String songLink(Track t) => Uri.parse(_pageUrl).replace(queryParameters: {
+        't': 'song',
+        's': t.title,
+        if (t.artists.isNotEmpty) 'a': t.artistLine,
+        if (t.album.isNotEmpty) 'al': t.album,
+        if (t.image.isNotEmpty) 'i': t.art(500),
+      }).toString();
+
+  static String playlistLink(String name, List<Track> tracks) =>
+      '${Uri.parse(_pageUrl).replace(queryParameters: {'t': 'playlist', 'n': name, 'c': '${tracks.length}'})}'
+      '#p=${encodePlaylist(name, tracks, withPrefix: false)}';
+
   static Future<void> shareTrack(Track t) {
-    final link = t.permaUrl.isNotEmpty ? '\n${t.permaUrl}' : '';
     return SharePlus.instance.share(ShareParams(
-      text: '🎵 ${t.title} — ${t.artistLine}$link\n\nShared from Samgeet',
+      text: '🎵 ${t.title} — ${t.artistLine}\n\nListen on Samgeet, the ad-free music player:\n${songLink(t)}',
       subject: t.title,
     ));
   }
 
-  static String encodePlaylist(String name, List<Track> tracks) {
+  static String encodePlaylist(String name, List<Track> tracks, {bool withPrefix = true}) {
     final payload = jsonEncode({'n': name, 'i': tracks.map((t) => t.id).toList()});
     final packed = base64Url.encode(gzip.encode(utf8.encode(payload)));
-    return '$_prefix$packed';
+    return withPrefix ? '$_prefix$packed' : packed;
   }
 
   // A pasted code is untrusted input: cap it before and after decompression so a tiny
@@ -53,7 +69,7 @@ class ShareService {
 
   /// Returns (name, songIds) if [text] contains a Samgeet playlist code.
   static ({String name, List<String> ids})? decodePlaylist(String text) {
-    final m = RegExp('(?:${RegExp.escape(_prefix)}|${RegExp.escape(_legacyPrefix)})([A-Za-z0-9_=-]+)').firstMatch(text);
+    final m = RegExp('(?:${RegExp.escape(_prefix)}|${RegExp.escape(_legacyPrefix)}|#p=)([A-Za-z0-9_=-]+)').firstMatch(text);
     if (m == null) return null;
     final code = m.group(1)!;
     if (code.length > maxCodeChars) return null;
@@ -89,7 +105,7 @@ class ShareService {
     ];
     return SharePlus.instance.share(ShareParams(
       text: '🎧 "$name" on Samgeet (${tracks.length} songs)\n\n${lines.join('\n')}\n\n'
-          'Open Samgeet → Library → Import, and paste this message:\n${encodePlaylist(name, tracks)}',
+          'Get Samgeet and import it (Library → Import → paste this message):\n${playlistLink(name, tracks)}',
       subject: name,
     ));
   }

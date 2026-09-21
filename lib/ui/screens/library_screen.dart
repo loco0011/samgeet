@@ -346,7 +346,7 @@ Future<void> showImportDialog(BuildContext context) async {
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Paste the message a friend shared from Samgeet.', style: TextStyle(color: AppColors.muted)),
         const SizedBox(height: 12),
-        TextField(controller: controller, maxLines: 4, decoration: const InputDecoration(hintText: 'samgeet://p/…')),
+        TextField(controller: controller, maxLines: 4, decoration: const InputDecoration(hintText: 'Paste the message or link here')),
         const SizedBox(height: 8),
         TextButton.icon(onPressed: paste, icon: const Icon(Icons.content_paste_rounded, size: 18), label: const Text('Paste from clipboard')),
       ]),

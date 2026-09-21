@@ -1,14 +1,29 @@
 # Samgeet
 
-**An open-source, ad-free music player — created by [Sambit Maity](https://www.linkedin.com/in/sambitmaity/).**
+**An open-source, ad-free music player for Android — created by [Sambit Maity](https://www.linkedin.com/in/sambitmaity/).**
+
+Streams up to 320 kbps, smart mood-matched autoplay, on-device taste learning, background playback with lock-screen controls.
+
+[![Download APK](https://img.shields.io/badge/Download-Samgeet.apk-7c4dff?style=for-the-badge&logo=android&logoColor=white)](https://github.com/loco0011/samgeet/releases/latest/download/Samgeet.apk)
+[![Latest release](https://img.shields.io/github/v/release/loco0011/samgeet?style=for-the-badge)](https://github.com/loco0011/samgeet/releases/latest)
 
 Licence: MIT (see [LICENSE](LICENSE)) · © 2026 Sambit Maity
 
-Ad-free music player. Streams up to 320 kbps, smart mood-matched autoplay, on-device taste learning.
+## Download and install (Android)
+1. Download **[Samgeet.apk](https://github.com/loco0011/samgeet/releases/latest/download/Samgeet.apk)** (or pick a version on the [Releases page](https://github.com/loco0011/samgeet/releases)).
+2. Open the file. Android will ask to allow installs from your browser or file manager — allow it once. (This is normal for any app installed outside the Play Store.)
+3. Open **Samgeet** and allow notifications so the lock-screen player shows up.
 
+Needs Android 7.0 or newer. Play Protect may warn about an unrecognised app because it is not from the Play Store; choose *Install anyway*. Each release page lists the SHA-256 of the APK so you can check the download.
+
+## Sharing
+Sharing a song or playlist sends a link to a small page on `api.sambitmaity.fun` that shows the song or playlist and a **Download Samgeet** button. Friends who already have the app can paste a playlist message into **Library → Import** to get the same list. The page hosts no music and no audio, only what the link itself carries plus the cover art from the catalogue's CDN. Playlist contents travel in the link's `#…` part, which browsers never send to the server. See [`backend/`](backend/README.md).
+
+## Build from source
 - Build APK: `flutter build apk --release` → `build/app/outputs/flutter-apk/app-release.apk`
 - Unit tests (offline): `flutter test`
 - Live server checks: `flutter test tool/live_api_check.dart`, `dart run tool/check_stream.dart`
+- Release signing: put your keystore details in `android/key.properties` (git-ignored). Without it the build falls back to the debug key, which is fine for testing but not for publishing.
 
 ## Layout
 - `lib/data` — API client, models, library store (favourites/playlists/history), catalog of categories
