@@ -24,8 +24,11 @@ law and with the terms of any third-party service they use. Availability and qua
 catalogue can change at any time.
 
 ## Privacy
-Profile details, playlists, favourites and listening history are stored on the user's own
-device. The app does not upload them.
+Playlists, favourites, listening history and any uploaded profile photo are stored on the
+user's own device and are not uploaded. When a user signs in, a copy of their profile (name,
+email, chosen icon or emoji, and preferred languages, moods and singers) is saved on the
+author's server, together with device details and the request's IP address only if the user
+opted in. Signing out deletes that copy.
 
 ## No warranty
 The software is provided "as is", without warranty of any kind. The author is not liable for

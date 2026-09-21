@@ -46,3 +46,14 @@ app.*.map.json
 
 # Built installers - attach these to a GitHub Release instead of committing them
 /dist/
+
+# Server credentials (live only on the web host)
+backend/api/config.php
+
+# Release signing (never commit)
+android/key.properties
+*.jks
+*.keystore
+
+# Gradle build output
+android/build/

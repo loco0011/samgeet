@@ -33,7 +33,7 @@ A dark "aurora" design: animated backdrop that follows the album, frosted-glass 
 The app recolours itself to the song's mood (Romantic, Melancholy, Party, Chill, Devotional, Nostalgic, Focus). The mood is *inferred* from title/album keywords, the category you started from and the era — there is no audio analysis. See `lib/engine/mood.dart`.
 
 ## Profile and limits
-"Sign in" creates a profile stored on this phone (name, required email, favourite languages/moods/singers). Optionally — off by default — it also keeps the device model and an approximate (city-level) location; the public IP will be recorded by the server once accounts exist. Guests can keep 5 songs per playlist and can't share playlists; signing in lifts both limits and seeds the recommendations. There is no password or cloud sync yet; accounts (email one-time-code sign-in and restoring data by email) are planned on Supabase.
+"Sign in" creates a profile stored on this phone (name, required email, favourite languages/moods/singers). Optionally — off by default — it also keeps the device model and an approximate (city-level) location; the public IP will be recorded by the server once accounts exist. Guests can keep 5 songs per playlist and can't share playlists; signing in lifts both limits and seeds the recommendations. A copy of the profile is saved on the author's server (a small PHP + MySQL API, see [`backend/`](backend/README.md)) and deleted on sign-out; playlists, favourites, history and the uploaded photo stay on the phone. There is no password or restore-by-email yet.
 
 ## Logo
 `assets/mark-chrome.webp` is the master (transparent background). The Android launcher, adaptive/monochrome and splash images under `android/app/src/main/res/` were generated from it.

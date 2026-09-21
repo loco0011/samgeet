@@ -1,0 +1,6 @@
+Options -Indexes
+
+# Never serve the credentials file.
+<Files "config.php">
+  Require all denied
+</Files>

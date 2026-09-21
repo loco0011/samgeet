@@ -43,6 +43,9 @@ String _clean(String s) => s
     .replaceAll('&gt;', '>')
     .trim();
 
+/// The app refuses cleartext traffic, so any `http://` link from the source is upgraded to https.
+String httpsOnly(String url) => url.startsWith('http://') ? 'https://${url.substring(7)}' : url;
+
 /// Decrypts the source's `encrypted_media_url` into a real stream URL.
 String decryptMediaUrl(String encrypted) {
   if (encrypted.isEmpty) return '';
@@ -53,8 +56,8 @@ String decryptMediaUrl(String encrypted) {
       paddingType: DESPaddingType.PKCS5,
     );
     final out = des.decrypt(base64.decode(encrypted));
-    final url = utf8.decode(out, allowMalformed: true).trim();
-    return url.startsWith('http') ? url : '';
+    final url = httpsOnly(utf8.decode(out, allowMalformed: true).trim());
+    return url.startsWith('https://') ? url : '';
   } catch (_) {
     return '';
   }
@@ -100,7 +103,7 @@ class Track {
   Duration get duration => Duration(seconds: durationSec);
 
   /// Artwork at a requested square size (the CDN serves 50/150/500).
-  String art([int size = 500]) => image
+  String art([int size = 500]) => httpsOnly(image)
       .replaceAll('150x150', '${size}x$size')
       .replaceAll('50x50', '${size}x$size')
       .replaceAll('250x250', '${size}x$size');
@@ -240,7 +243,7 @@ class MediaCard {
     this.permaUrl = '',
   });
 
-  String art([int size = 500]) => image
+  String art([int size = 500]) => httpsOnly(image)
       .replaceAll('150x150', '${size}x$size')
       .replaceAll('50x50', '${size}x$size')
       .replaceAll('250x250', '${size}x$size');
@@ -296,7 +299,7 @@ class Collection {
     this.permaUrl = '',
   });
 
-  String art([int size = 500]) => image
+  String art([int size = 500]) => httpsOnly(image)
       .replaceAll('150x150', '${size}x$size')
       .replaceAll('50x50', '${size}x$size')
       .replaceAll('250x250', '${size}x$size');

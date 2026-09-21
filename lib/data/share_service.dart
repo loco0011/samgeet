@@ -1,10 +1,26 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:share_plus/share_plus.dart';
 
 import 'library_store.dart';
 import 'track.dart';
+
+class _CappedSink implements Sink<List<int>> {
+  final BytesBuilder _out;
+  final int _limit;
+  _CappedSink(this._out, this._limit);
+
+  @override
+  void add(List<int> chunk) {
+    _out.add(chunk);
+    if (_out.length > _limit) throw const FormatException('playlist code too large');
+  }
+
+  @override
+  void close() {}
+}
 
 /// Sharing songs and playlists.
 ///
@@ -29,18 +45,40 @@ class ShareService {
     return '$_prefix$packed';
   }
 
+  // A pasted code is untrusted input: cap it before and after decompression so a tiny
+  // crafted code can't expand into gigabytes and crash the app.
+  static const maxCodeChars = 40000;
+  static const maxPayloadBytes = 256 * 1024;
+  static const maxSongs = 500;
+
   /// Returns (name, songIds) if [text] contains a Samgeet playlist code.
   static ({String name, List<String> ids})? decodePlaylist(String text) {
     final m = RegExp('(?:${RegExp.escape(_prefix)}|${RegExp.escape(_legacyPrefix)})([A-Za-z0-9_=-]+)').firstMatch(text);
     if (m == null) return null;
+    final code = m.group(1)!;
+    if (code.length > maxCodeChars) return null;
     try {
-      final json = jsonDecode(utf8.decode(gzip.decode(base64Url.decode(m.group(1)!)))) as Map;
-      final ids = (json['i'] as List).map((e) => '$e').toList();
+      final raw = _gunzipCapped(base64Url.decode(code), maxPayloadBytes);
+      final json = jsonDecode(utf8.decode(raw)) as Map;
+      final ids = (json['i'] as List).map((e) => '$e').where((s) => s.isNotEmpty && s.length <= 64).take(maxSongs).toList();
       if (ids.isEmpty) return null;
-      return (name: '${json['n'] ?? 'Shared playlist'}', ids: ids);
+      var name = '${json['n'] ?? 'Shared playlist'}'.trim();
+      if (name.isEmpty) name = 'Shared playlist';
+      if (name.length > 80) name = name.substring(0, 80);
+      return (name: name, ids: ids);
     } catch (_) {
       return null;
     }
+  }
+
+  /// Gunzips [data], throwing as soon as the output would pass [limit] bytes.
+  static List<int> _gunzipCapped(List<int> data, int limit) {
+    final out = BytesBuilder(copy: false);
+    final sink = _CappedSink(out, limit);
+    final conv = gzip.decoder.startChunkedConversion(sink);
+    conv.add(data);
+    conv.close();
+    return out.takeBytes();
   }
 
   static Future<void> sharePlaylist(String name, List<Track> tracks) {

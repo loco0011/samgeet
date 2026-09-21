@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart' show LicenseEntryWithLineBreaks, LicenseRegistry;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'data/cloud_service.dart';
 import 'data/library_store.dart';
 import 'data/saavn_api.dart';
 import 'engine/recommendation_service.dart';
@@ -38,6 +42,8 @@ Future<void> main() async {
   await session.configure(const AudioSessionConfiguration.music());
 
   final library = await LibraryStore.load();
+  library.cloud = CloudService(await SharedPreferences.getInstance());
+  unawaited(library.cloud!.retryPending(library.profile));
   final api = SaavnApi();
   final reco = RecommendationService(api, library);
   final player = PlayerController(api: api, library: library, reco: reco);

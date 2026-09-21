@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/taste_profile.dart';
+import 'cloud_service.dart';
 import 'profile.dart';
 import 'track.dart';
 
@@ -57,6 +58,9 @@ class LibraryStore extends ChangeNotifier {
   bool autoplay = true;
   List<String> languages = ['hindi', 'bengali', 'english'];
   Profile? profile;
+
+  /// Online copy of the profile. Left null in tests and when offline-only.
+  CloudService? cloud;
 
   /// Which dark accent style the app wears when a song has no clear mood.
   String accent = 'ember';
@@ -308,6 +312,8 @@ class LibraryStore extends ChangeNotifier {
     }
     _touch('settings');
     _changed('profile');
+    final c = cloud;
+    if (c != null) unawaited(c.saveProfile(p));
   }
 
   void signOut() {
@@ -315,6 +321,8 @@ class LibraryStore extends ChangeNotifier {
     if (photo != null) File(photo).delete().catchError((_) => File(photo));
     profile = null;
     _changed('profile');
+    final c = cloud;
+    if (c != null) unawaited(c.deleteProfile()); // the server copy goes too
   }
 
   void setAccent(String id) {

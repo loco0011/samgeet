@@ -316,7 +316,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'Your profile is saved on this phone. There is no password and no cloud sync yet.',
+                    'Your profile is saved on this phone and copied to Samgeet\'s server; signing out deletes the copy. Playlists, favourites and history stay on this phone. There is no password.',
                     style: TextStyle(color: AppColors.muted, fontSize: 12, height: 1.4),
                   ),
                 ),
