@@ -65,7 +65,10 @@ class GlassChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final IconData? icon;
-  const GlassChip({super.key, required this.label, required this.selected, required this.onTap, this.icon});
+
+  /// Smaller padding and text, for long lists of chips.
+  final bool dense;
+  const GlassChip({super.key, required this.label, required this.selected, required this.onTap, this.icon, this.dense = false});
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +88,7 @@ class GlassChip extends StatelessWidget {
           boxShadow: selected ? [BoxShadow(color: mood.accent.withValues(alpha: 0.4), blurRadius: 14)] : null,
         ),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          padding: dense ? const EdgeInsets.symmetric(horizontal: 12, vertical: 6) : const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(30),
             color: selected ? AppColors.bg.withValues(alpha: 0.55) : AppColors.bg.withValues(alpha: 0.35),
@@ -94,7 +97,7 @@ class GlassChip extends StatelessWidget {
             if (icon != null) ...[Icon(icon, size: 16, color: selected ? Colors.white : AppColors.muted), const SizedBox(width: 6)],
             Text(
               label,
-              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: selected ? Colors.white : AppColors.muted),
+              style: TextStyle(fontSize: dense ? 12.5 : 13.5, fontWeight: FontWeight.w700, color: selected ? Colors.white : AppColors.muted),
             ),
           ]),
         ),

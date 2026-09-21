@@ -60,29 +60,35 @@ class AboutScreen extends StatelessWidget {
           Icons.person_rounded,
           'Created by $kAuthor',
           'Samgeet is an open-source app designed, built and maintained by $kAuthor.',
-          action: Wrap(spacing: 10, runSpacing: 10, children: [
-            Pressable(
-              onTap: () => _open(context, kAuthorLinkedIn),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(gradient: mood.gradient, borderRadius: BorderRadius.circular(30)),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.open_in_new_rounded, size: 18),
-                  SizedBox(width: 8),
-                  Text('Connect on LinkedIn', style: TextStyle(fontWeight: FontWeight.w700)),
-                ]),
+          // Two equal buttons on one row, whatever the screen width.
+          action: Row(children: [
+            Expanded(
+              child: Pressable(
+                onTap: () => _open(context, kAuthorLinkedIn),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(gradient: mood.gradient, borderRadius: BorderRadius.circular(30)),
+                  child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.open_in_new_rounded, size: 18),
+                    SizedBox(width: 8),
+                    Text('LinkedIn', style: TextStyle(fontWeight: FontWeight.w700)),
+                  ]),
+                ),
               ),
             ),
-            Pressable(
-              onTap: () => _open(context, kSourceCodeUrl),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(borderRadius: BorderRadius.circular(30), border: Border.all(color: mood.accent, width: 1.5)),
-                child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Icons.code_rounded, size: 18),
-                  SizedBox(width: 8),
-                  Text('View on GitHub', style: TextStyle(fontWeight: FontWeight.w700)),
-                ]),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Pressable(
+                onTap: () => _open(context, kSourceCodeUrl),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10.5),
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(30), border: Border.all(color: mood.accent, width: 1.5)),
+                  child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.code_rounded, size: 18),
+                    SizedBox(width: 8),
+                    Text('GitHub', style: TextStyle(fontWeight: FontWeight.w700)),
+                  ]),
+                ),
               ),
             ),
           ]),

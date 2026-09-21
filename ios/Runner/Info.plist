@@ -4,6 +4,8 @@
 <dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Samgeet uses your approximate location, only if you agree at sign-in, to understand where its listeners are.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Samgeet uses a photo you pick as your profile picture. It stays on this phone.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -310,6 +311,8 @@ class LibraryStore extends ChangeNotifier {
   }
 
   void signOut() {
+    final photo = profile?.photoPath; // the uploaded picture goes with the profile
+    if (photo != null) File(photo).delete().catchError((_) => File(photo));
     profile = null;
     _changed('profile');
   }

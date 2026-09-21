@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/catalog.dart';
@@ -46,7 +50,9 @@ class _SignInScreenState extends State<SignInScreen> {
   final Set<String> _moods = {};
   final Set<String> _artists = {};
   String? _emailError;
-  String _avatar = ''; // id from kAvatarIcons; empty = initials
+  String _avatar = ''; // see Profile.avatar
+  String? _newPhoto; // a photo copied in during this visit; removed again unless saved
+  bool _saved = false;
   bool _share = false; // opt-in: device details + approximate location
   bool _saving = false;
 
@@ -69,7 +75,27 @@ class _SignInScreenState extends State<SignInScreen> {
   void dispose() {
     _name.dispose();
     _email.dispose();
+    if (!_saved) _deleteFile(_newPhoto);
     super.dispose();
+  }
+
+  void _deleteFile(String? path) {
+    if (path != null) File(path).delete().catchError((_) => File(path));
+  }
+
+  Future<void> _pickPhoto() async {
+    try {
+      final picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 512, maxHeight: 512, imageQuality: 85);
+      if (picked == null) return;
+      final dir = await getApplicationDocumentsDirectory();
+      final dest = '${dir.path}/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      await File(picked.path).copy(dest);
+      _deleteFile(_newPhoto); // an earlier pick from this visit
+      _newPhoto = dest;
+      if (mounted) setState(() => _avatar = '${Profile.photoPrefix}$dest');
+    } catch (_) {
+      if (mounted) toast(context, 'Couldn\'t load that photo');
+    }
   }
 
   bool get _valid => _name.text.trim().isNotEmpty && _email.text.trim().isNotEmpty;
@@ -107,6 +133,11 @@ class _SignInScreenState extends State<SignInScreen> {
       device: device,
     );
     lib.signIn(profile);
+    _saved = true;
+    // Tidy up photos that are no longer the picture: the old saved one, or an unused pick.
+    final oldPhoto = existing?.photoPath;
+    if (oldPhoto != null && oldPhoto != profile.photoPath) _deleteFile(oldPhoto);
+    if (_newPhoto != null && _newPhoto != profile.photoPath) _deleteFile(_newPhoto);
     Navigator.of(context).pop(true);
     toast(context, wasEditing ? 'Profile saved' : 'Welcome to Samgeet, ${profile.name}!');
   }
@@ -115,8 +146,8 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget build(BuildContext context) {
     final mood = moodPalette(context);
     final editing = _editing;
-    final singers = <String>{for (final g in Catalog.artistGroups) ...g.names}.toList();
     final initials = Profile(name: _name.text, createdAt: 0).initials;
+    final hasPhoto = _avatar.startsWith(Profile.photoPrefix);
 
     Widget section(String title, String subtitle, Widget child) => Padding(
           padding: const EdgeInsets.only(top: 26),
@@ -185,17 +216,29 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
               section(
                 'Profile picture',
-                'Pick an icon, or keep your initials',
-                Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                  ProfileAvatar(initials: initials, avatar: _avatar, size: 68),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Wrap(spacing: 8, runSpacing: 8, children: [
-                      _AvatarChoice(selected: _avatar.isEmpty, onTap: () => setState(() => _avatar = ''), child: Text(initials, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
-                      for (final e in kAvatarIcons.entries)
-                        _AvatarChoice(selected: _avatar == e.key, onTap: () => setState(() => _avatar = e.key), child: Icon(e.value, size: 20)),
-                    ]),
-                  ),
+                'Upload a photo, or pick an icon or emoji',
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                    ProfileAvatar(initials: initials, avatar: _avatar, size: 68),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Wrap(spacing: 8, runSpacing: 8, children: [
+                        GlassChip(label: hasPhoto ? 'Change photo' : 'Upload photo', icon: Icons.photo_library_rounded, selected: hasPhoto, onTap: _pickPhoto),
+                        if (hasPhoto) GlassChip(label: 'Remove', icon: Icons.delete_outline_rounded, selected: false, onTap: () => setState(() => _avatar = '')),
+                      ]),
+                    ),
+                  ]),
+                  const SizedBox(height: 14),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    _AvatarChoice(selected: _avatar.isEmpty, onTap: () => setState(() => _avatar = ''), child: Text(initials, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
+                    for (final e in kAvatarIcons.entries)
+                      _AvatarChoice(selected: _avatar == e.key, onTap: () => setState(() => _avatar = e.key), child: Icon(e.value, size: 20)),
+                  ]),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 8, runSpacing: 8, children: [
+                    for (final e in kAvatarEmojis)
+                      _AvatarChoice(selected: _avatar == '${Profile.emojiPrefix}$e', onTap: () => setState(() => _avatar = '${Profile.emojiPrefix}$e'), child: Text(e, style: const TextStyle(fontSize: 20))),
+                  ]),
                 ]),
               ),
               const SizedBox(height: 24),
@@ -222,8 +265,31 @@ class _SignInScreenState extends State<SignInScreen> {
               section(
                 'Favourite singers',
                 'Pick a few — your daily mix starts here',
-                Wrap(spacing: 8, runSpacing: 8, children: [
-                  for (final n in singers) GlassChip(label: n, selected: _artists.contains(n), onTap: () => _toggle(_artists, n)),
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  for (final g in Catalog.artistGroups) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2, bottom: 6),
+                      child: Row(children: [
+                        Text(g.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                        if (g.names.any(_artists.contains)) ...[
+                          const SizedBox(width: 8),
+                          Text('${g.names.where(_artists.contains).length} picked', style: TextStyle(color: mood.light, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                        ],
+                      ]),
+                    ),
+                    // One swipeable row per group keeps the long list compact.
+                    SizedBox(
+                      height: 38,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        clipBehavior: Clip.none,
+                        itemCount: g.names.length,
+                        separatorBuilder: (_, _) => const SizedBox(width: 8),
+                        itemBuilder: (_, i) => Center(child: GlassChip(dense: true, label: g.names[i], selected: _artists.contains(g.names[i]), onTap: () => _toggle(_artists, g.names[i]))),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                 ]),
               ),
               const SizedBox(height: 22),

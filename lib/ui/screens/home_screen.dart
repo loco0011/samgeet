@@ -186,11 +186,7 @@ class _Header extends StatelessWidget {
         const SizedBox(width: 14),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Container(width: 7, height: 7, decoration: BoxDecoration(shape: BoxShape.circle, color: palette.light, boxShadow: [BoxShadow(color: palette.light, blurRadius: 8)])),
-              const SizedBox(width: 8),
-              Text(greeting.toUpperCase(), style: const TextStyle(color: AppColors.muted, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 2)),
-            ]),
+            Text(greeting.toUpperCase(), style: const TextStyle(color: AppColors.muted, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 2)),
             const SizedBox(height: 4),
             FittedBox(
               fit: BoxFit.scaleDown,

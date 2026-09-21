@@ -13,8 +13,14 @@ class Profile {
   final List<String> artists; // singer names
   final int createdAt;
 
-  /// Id of the chosen avatar icon (see `kAvatarIcons`); empty means show the initials.
+  /// The profile picture, as one string: empty (show the initials), an icon id
+  /// (see `kAvatarIcons`), `emoji:🎧`, or `photo:<file path>` for an uploaded image.
   final String avatar;
+  static const emojiPrefix = 'emoji:';
+  static const photoPrefix = 'photo:';
+
+  /// File path of the uploaded photo, if the picture is one.
+  String? get photoPath => avatar.startsWith(photoPrefix) ? avatar.substring(photoPrefix.length) : null;
 
   /// The listener agreed to share device details and approximate location.
   final bool shareDeviceInfo;
