@@ -1,6 +1,6 @@
 <?php
 // Samgeet share page: what a friend sees when they open a shared song or playlist link.
-//   share.php?t=song&s=<title>&a=<artist>&al=<album>&i=<cover url>
+//   share.php?t=song&id=<song id>&s=<title>&a=<artist>&al=<album>&i=<cover url>
 //   share.php?t=playlist&n=<name>&c=<song count>#p=<playlist code>
 // It shows only text the link itself carries, plus the cover art hotlinked from the catalogue's CDN.
 // It has no database, stores nothing, plays no audio and offers no song files: it is a link
@@ -98,6 +98,8 @@ header("Content-Security-Policy: default-src 'none'; img-src 'self' https://*.sa
   .sub { color: #b9b9c9; margin: 0; overflow-wrap: anywhere; }
   .btn { display: block; margin-top: 22px; padding: 15px; border-radius: 999px; font-weight: 700; text-decoration: none; color: #fff;
     background: linear-gradient(90deg, #12c2d6, #7c4dff 55%, #d61fa2); border: 0; width: 100%; font-size: 16px; cursor: pointer; }
+  .btn.ghost { background: transparent; border: 1px solid #ffffff33; margin-top: 12px; }
+  #open { display: none; }
   .alt { display: block; margin-top: 12px; color: #b9b9c9; font-size: 14px; }
   .steps { text-align: left; color: #b9b9c9; font-size: 14px; line-height: 1.55; margin: 20px 0 0; padding-left: 20px; }
   .steps b { color: #f3f3f8; }
@@ -119,7 +121,8 @@ header("Content-Security-Policy: default-src 'none'; img-src 'self' https://*.sa
 <?php if ($sub !== ''): ?>
     <p class="sub"><?= e($sub) ?></p>
 <?php endif; ?>
-    <a class="btn" href="<?= e(APK_URL) ?>">Download Samgeet for Android</a>
+    <a class="btn" id="open" href="#">Open in Samgeet</a>
+    <a class="btn ghost" href="<?= e(APK_URL) ?>">Download Samgeet for Android</a>
     <span class="alt">Free · ad-free · <a href="<?= e(RELEASES_URL) ?>">all versions</a></span>
 <?php if ($type === 'playlist'): ?>
     <ol class="steps">
@@ -142,6 +145,12 @@ header("Content-Security-Policy: default-src 'none'; img-src 'self' https://*.sa
   </p>
 </main>
 <script nonce="<?= e($nonce) ?>">
+  // On Android, hand this same link to the app (needs Samgeet installed; otherwise nothing happens).
+  var o = document.getElementById('open');
+  if (o && /Android/i.test(navigator.userAgent)) {
+    o.href = 'samgeet://share' + location.search + location.hash;
+    o.style.display = 'block';
+  }
   var b = document.getElementById('import');
   if (b && location.hash.indexOf('#p=') === 0) {
     b.style.display = 'block';

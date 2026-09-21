@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../data/deep_link.dart';
+import '../data/saavn_api.dart';
 import '../player/player_controller.dart';
 import 'nav.dart';
 import 'responsive.dart';
 import 'screens/explore_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/library_screen.dart';
+import 'screens/library_screen.dart' show LibraryScreen, importPlaylistIds;
 import 'screens/search_screen.dart';
 import 'mood_theme.dart';
 import 'theme.dart';
@@ -31,6 +33,8 @@ class _AppShellState extends State<AppShell> {
   final _keys = List.generate(4, (_) => GlobalKey<NavigatorState>());
   int _index = 0;
   StreamSubscription<String>? _toasts;
+  final _deepLinks = DeepLinks();
+  StreamSubscription<String>? _linkSub;
 
   static const _pages = <Widget>[
     HomeScreen(),
@@ -69,11 +73,48 @@ class _AppShellState extends State<AppShell> {
     _toasts = context.read<PlayerController>().messages.listen((m) {
       if (mounted) toast(context, m);
     });
+    // Opened from a shared song/playlist link: at launch, or while the app was already running.
+    _linkSub = _deepLinks.links.listen(_openLink);
+    _deepLinks.initial().then((l) {
+      if (l != null) _openLink(l);
+    });
+  }
+
+  Future<void> _openLink(String raw) async {
+    final link = parseSharedLink(raw);
+    if (link == null || !mounted) return;
+    final api = context.read<SaavnApi>();
+    final player = context.read<PlayerController>();
+    switch (link) {
+      case SharedSong():
+        try {
+          final found = await api.details([link.id]);
+          if (found.isEmpty) throw ApiException('That song is not available');
+          await player.playSingle(found.first, context: 'a shared song');
+        } catch (e) {
+          if (mounted) toast(context, 'Could not open that song: $e');
+        }
+      case SharedPlaylist():
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Add shared playlist?', style: TextStyle(fontWeight: FontWeight.w800)),
+            content: Text('"${link.name}" has ${plural(link.ids.length, 'song')}. Add it to your library?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Not now')),
+              FilledButton(style: FilledButton.styleFrom(backgroundColor: AppColors.pink), onPressed: () => Navigator.pop(ctx, true), child: const Text('Add')),
+            ],
+          ),
+        );
+        if (ok == true && mounted) await importPlaylistIds(context, link.name, link.ids);
+    }
   }
 
   @override
   void dispose() {
     _toasts?.cancel();
+    _linkSub?.cancel();
+    _deepLinks.dispose();
     super.dispose();
   }
 

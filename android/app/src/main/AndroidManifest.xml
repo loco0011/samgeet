@@ -31,6 +31,22 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Tapping a shared https://api.sambitmaity.fun/share.php link opens the app (verified via
+                 .well-known/assetlinks.json on that host). The samgeet://share form is the fallback used
+                 by the page's "Open in Samgeet" button. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="api.sambitmaity.fun" android:pathPrefix="/share.php" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="samgeet" android:host="share" />
+            </intent-filter>
         </activity>
 
         <!-- Background playback + lock-screen / notification controls -->

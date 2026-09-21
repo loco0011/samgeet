@@ -47,3 +47,12 @@ GitHub release. Upload it next to `profile.php`; it needs no database or config.
 It hosts no music or audio. It shows only text carried in the link, escapes all of it, and embeds
 cover art only from `*.saavncdn.com`. The `#p=` code never reaches the server. If you rename the
 APK or move the repo, change `APK_URL` at the top of the file.
+
+## Making links open the app (`api/.well-known/assetlinks.json`)
+Upload the whole `.well-known` folder next to `share.php` so that
+`https://api.sambitmaity.fun/.well-known/assetlinks.json` returns the JSON. Android reads it once at
+install time to confirm Samgeet owns `api.sambitmaity.fun/share.php` links; after that, tapping such a
+link opens the app directly instead of the browser. It lists the SHA-256 fingerprint of the **release**
+signing key, so builds signed with another key (debug builds) won't open the links. If the file isn't
+live yet, links open the web page, whose **Open in Samgeet** button still works. To re-check on a phone:
+`adb shell pm get-app-links app.samgeet.music` should show `api.sambitmaity.fun: verified`.

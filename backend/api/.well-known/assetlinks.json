@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.samgeet.music",
+      "sha256_cert_fingerprints": ["EE:FF:FE:6E:23:D5:BC:E6:5D:13:CB:05:B8:5C:B0:8C:3F:36:3A:8D:2E:B6:CE:98:92:DD:7C:19:05:9F:D6:D7"]
+    }
+  }
+]

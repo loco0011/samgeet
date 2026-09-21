@@ -17,7 +17,7 @@ Licence: MIT (see [LICENSE](LICENSE)) · © 2026 Sambit Maity
 Needs Android 7.0 or newer. Play Protect may warn about an unrecognised app because it is not from the Play Store; choose *Install anyway*. Each release page lists the SHA-256 of the APK so you can check the download.
 
 ## Sharing
-Sharing a song or playlist sends a link to a small page on `api.sambitmaity.fun` that shows the song or playlist and a **Download Samgeet** button. Friends who already have the app can paste a playlist message into **Library → Import** to get the same list. The page hosts no music and no audio, only what the link itself carries plus the cover art from the catalogue's CDN. Playlist contents travel in the link's `#…` part, which browsers never send to the server. See [`backend/`](backend/README.md).
+Sharing a song or playlist sends a link to a small page on `api.sambitmaity.fun` that shows the song or playlist and a **Download Samgeet** button. Friends who already have the app just tap the link: it opens Samgeet, which plays the song or asks before adding the playlist (Android App Links, with an **Open in Samgeet** button on the page as a fallback). Playlist messages can also be pasted into **Library → Import**. The page hosts no music and no audio, only what the link itself carries plus the cover art from the catalogue's CDN. Playlist contents travel in the link's `#…` part, which browsers never send to the server. See [`backend/`](backend/README.md).
 
 ## Build from source
 - Build APK: `flutter build apk --release` → `build/app/outputs/flutter-apk/app-release.apk`

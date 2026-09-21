@@ -38,6 +38,7 @@ class ShareService {
 
   static String songLink(Track t) => Uri.parse(_pageUrl).replace(queryParameters: {
         't': 'song',
+        'id': t.id,
         's': t.title,
         if (t.artists.isNotEmpty) 'a': t.artistLine,
         if (t.album.isNotEmpty) 'al': t.album,

@@ -331,8 +331,6 @@ class UserPlaylistScreen extends StatelessWidget {
 /// Paste a shared message (or just its code) to rebuild a friend's playlist.
 Future<void> showImportDialog(BuildContext context) async {
   final controller = TextEditingController();
-  final lib = context.read<LibraryStore>();
-  final api = context.read<SaavnApi>();
 
   Future<void> paste() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
@@ -363,15 +361,22 @@ Future<void> showImportDialog(BuildContext context) async {
     toast(context, 'That doesn\'t look like a Samgeet playlist');
     return;
   }
-  if (!await allowPlaylistSize(context, decoded.ids.length)) return;
+  await importPlaylistIds(context, decoded.name, decoded.ids);
+}
+
+/// Looks up [ids] and saves them as a new playlist called [name] (also used by tapped share links).
+Future<void> importPlaylistIds(BuildContext context, String name, List<String> ids) async {
+  final lib = context.read<LibraryStore>();
+  final api = context.read<SaavnApi>();
+  if (!await allowPlaylistSize(context, ids.length)) return;
   if (!context.mounted) return;
-  toast(context, 'Importing ${decoded.ids.length} songs…');
+  toast(context, 'Importing ${ids.length} songs…');
   try {
-    final tracks = await api.details(decoded.ids);
+    final tracks = await api.details(ids);
     if (tracks.isEmpty) throw ApiException('No songs could be found');
     final byId = {for (final t in tracks) t.id: t};
-    final ordered = [for (final id in decoded.ids) ?byId[id]];
-    final p = lib.createPlaylist(decoded.name, tracks: ordered);
+    final ordered = [for (final id in ids) ?byId[id]];
+    final p = lib.createPlaylist(name, tracks: ordered);
     if (context.mounted) toast(context, 'Imported "${p.name}" (${ordered.length} songs)');
   } catch (e) {
     if (context.mounted) toast(context, 'Import failed: $e');
