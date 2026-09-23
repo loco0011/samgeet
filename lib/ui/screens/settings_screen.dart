@@ -103,10 +103,24 @@ class SettingsScreen extends StatelessWidget {
               ),
           ]),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-          child: Text(lib.signedIn ? 'Songs with a clear mood (romantic, sad, party…) recolour the app while they play.' : 'Sign in to unlock more colour styles, and colours that follow the mood of your music.', style: const TextStyle(color: AppColors.muted, fontSize: 12.5, height: 1.4)),
-        ),
+        if (lib.signedIn)
+          SwitchListTile(
+            value: lib.moodColors,
+            activeThumbColor: AppColors.pink,
+            title: const Text('Colours follow the music', style: TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text(
+              lib.moodColors
+                  ? 'When 3 of your last 5 songs share a mood (romantic, sad, party…), the app takes on its colours. They stay for at least 5 minutes.'
+                  : 'The app keeps the accent style you picked above.',
+              style: const TextStyle(color: AppColors.muted),
+            ),
+            onChanged: lib.setMoodColors,
+          )
+        else
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 10, 20, 0),
+            child: Text('Sign in to unlock more colour styles, and colours that follow the mood of your music.', style: TextStyle(color: AppColors.muted, fontSize: 12.5, height: 1.4)),
+          ),
         section('Streaming quality'),
         RadioGroup<AudioQuality>(
           groupValue: lib.quality,

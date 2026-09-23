@@ -8,6 +8,7 @@ import '../nav.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/glass.dart';
+import '../widgets/update_dialog.dart';
 
 /// About Samgeet: who made it, the licence, the branding rule and the disclaimers.
 class AboutScreen extends StatelessWidget {
@@ -51,6 +52,11 @@ class AboutScreen extends StatelessWidget {
             GradientText(kAppName, gradient: mood.textGradient, style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: -1.2)),
             const SizedBox(height: 4),
             const Text('Version $kAppVersion', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+            TextButton.icon(
+              onPressed: () => checkForUpdate(context, manual: true),
+              icon: const Icon(Icons.system_update_rounded, size: 18),
+              label: const Text('Check for updates'),
+            ),
             const SizedBox(height: 6),
             const Text('Ad-free music, open to everyone', style: TextStyle(color: AppColors.muted, fontSize: 13)),
           ]),

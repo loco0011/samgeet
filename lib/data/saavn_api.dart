@@ -151,52 +151,70 @@ class SaavnApi {
     return _tracks(j['results']);
   }
 
-  /// Song search that forgives typos and partial names.
+  /// Song search that forgives typos, partial names and lyric lines.
   ///
   /// The catalogue search copes with small misspellings but returns nothing
-  /// when one word of a longer query is wrong ("blinding lite weeknd"). When
-  /// the direct results are thin or don't look like what was typed, this also
-  /// tries the autocomplete's guesses and the query with each word left out,
+  /// when one word of a longer query is wrong ("blinding lite weeknd"), and it
+  /// doesn't search lyrics. So this also:
+  ///  * puts the autocomplete's own song picks first (it matches lyric lines:
+  ///    "mujhko itna bataaye koi" -> Kesariya);
+  ///  * when the direct results are thin or don't look like what was typed,
+  ///    tries the autocomplete's guesses and the query with each word left out;
   /// then ranks everything by how closely it matches the query.
   Future<SongSearch> findSongs(String query, {int n = 30}) async {
     final q = query.trim();
-    final direct = await Future.wait([
+    final direct = await Future.wait<dynamic>([
       searchSongs(q, n: n),
-      suggestions(q).catchError((_) => <String>[]),
+      _autocomplete(q).catchError((_) => null),
     ]);
     final primary = direct[0] as List<Track>;
-    final guesses = direct[1] as List<String>;
+    final ac = direct[1];
+    final acIds = _acSongIds(ac).take(4).toList();
+    final guesses = [for (final e in _acEntries(ac, const ['topquery', 'songs'])) cleanText('${e['title'] ?? ''}')];
 
     double best(List<Track> l) => l.take(5).fold(0.0, (m, t) => math.max(m, Fuzzy.songScore(q, t)));
     final strong = primary.length >= 8 && best(primary) >= 0.8;
-    if (strong) return SongSearch(primary);
 
     final lower = q.toLowerCase();
-    final alternatives = <String>{
-      ...guesses.where((g) => g.toLowerCase() != lower).take(2),
-      ...Fuzzy.dropOneWord(q),
-    }.take(6).toList();
-    final extra = await Future.wait([
+    final alternatives = strong
+        ? const <String>[]
+        : <String>{
+            ...guesses.where((g) => g.isNotEmpty && g.toLowerCase() != lower).take(2),
+            ...Fuzzy.dropOneWord(q),
+          }.take(6).toList();
+    final more = await Future.wait<List<Track>>([
+      acIds.isEmpty ? Future.value(const <Track>[]) : details(acIds).catchError((_) => <Track>[]),
       for (final a in alternatives) searchSongs(a, n: 15).catchError((_) => <Track>[]),
     ]);
+    final byId = {for (final t in more[0]) t.id: t};
+    final picks = [for (final id in acIds) ?byId[id]];
 
-    // Direct results keep a head start; the rest must actually look like the query.
     final scored = <String, ({Track track, double score, String from})>{};
+    void put(Track t, double s, String from) {
+      final prev = scored[t.id];
+      if (prev == null || s > prev.score) scored[t.id] = (track: t, score: s, from: from);
+    }
+
+    // Direct results keep a head start; alternatives must actually look like the query.
     void add(List<Track> list, String from, double head) {
       for (var i = 0; i < list.length; i++) {
         final t = list[i];
         final match = Fuzzy.songScore(q, t);
         if (from != q && match < 0.4) continue;
-        final s = match + head * (1 - i / math.max(1, list.length));
-        final prev = scored[t.id];
-        if (prev == null || s > prev.score) scored[t.id] = (track: t, score: s, from: from);
+        put(t, match + head * (1 - i / math.max(1, list.length)), from);
       }
     }
 
     add(primary, q, 0.25);
     for (var i = 0; i < alternatives.length; i++) {
-      add(extra[i], alternatives[i], 0.12);
+      add(more[i + 1], alternatives[i], 0.12);
     }
+    // The autocomplete's picks may share no words with the query (a lyric
+    // line), so they're trusted as they are, the first one most.
+    for (var i = 0; i < picks.length; i++) {
+      put(picks[i], math.max(Fuzzy.songScore(q, picks[i]), 0.9) + 0.35 * (1 - i / picks.length), q);
+    }
+
     final ranked = scored.values.toList()..sort((a, b) => b.score.compareTo(a.score));
     final top = ranked.isEmpty ? null : ranked.first;
     return SongSearch(
@@ -230,26 +248,33 @@ class SaavnApi {
         .toList();
   }
 
+  Future<dynamic> _autocomplete(String query) =>
+      _get('autocomplete.get', {'query': query.trim()}, ttl: const Duration(minutes: 5));
+
+  List<Map> _acEntries(dynamic j, List<String> keys) => [
+        for (final k in keys)
+          if (j is Map && j[k] is Map && j[k]['data'] is List) ...(j[k]['data'] as List).whereType<Map>(),
+      ];
+
+  /// Ids of the songs the autocomplete matched, best first. The autocomplete
+  /// also matches lyric lines, so this is how "a line from the song" is found.
+  List<String> _acSongIds(dynamic j) {
+    final ids = <String>[];
+    for (final e in _acEntries(j, const ['topquery', 'songs'])) {
+      final id = '${e['id'] ?? ''}';
+      if (e['type'] == 'song' && id.isNotEmpty && !ids.contains(id)) ids.add(id);
+    }
+    return ids;
+  }
+
   Future<List<String>> suggestions(String query) async {
     if (query.trim().length < 2) return const [];
-    final j = await _get('autocomplete.get', {'query': query}, ttl: const Duration(minutes: 5));
+    final j = await _autocomplete(query);
     final out = <String>[];
-    void take(String key) {
-      final d = j[key]?['data'];
-      if (d is List) {
-        for (final e in d) {
-          if (e is Map) {
-            final t = '${e['title'] ?? ''}'.trim();
-            if (t.isNotEmpty && !out.contains(t)) out.add(t);
-          }
-        }
-      }
+    for (final e in _acEntries(j, const ['topquery', 'songs', 'artists', 'albums'])) {
+      final t = cleanText('${e['title'] ?? ''}');
+      if (t.isNotEmpty && !out.contains(t)) out.add(t);
     }
-
-    take('topquery');
-    take('songs');
-    take('artists');
-    take('albums');
     return out.take(8).toList();
   }
 

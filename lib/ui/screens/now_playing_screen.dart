@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -45,6 +46,8 @@ class NowPlayingScreen extends StatelessWidget {
           final accent = !moodC.themed ? base : Color.lerp(base, moodC.palette.colors[1], 0.55)!;
           return _SwipeDownToMinimize(
               child: Scaffold(
+                // Solid, so nothing from the page underneath shows through the player.
+                backgroundColor: AppColors.bg,
             body: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -203,7 +206,7 @@ class _TitleRow extends StatelessWidget {
               if (lib.autoplay) const _Pill(icon: Icons.auto_awesome_rounded, label: 'Smart radio'),
               if (context.watch<MoodController>().themed)
                 _Pill(icon: context.watch<MoodController>().palette.icon, label: context.watch<MoodController>().palette.label)
-              else if (context.watch<MoodController>().mood != null)
+              else if (context.watch<MoodController>().songMood != null)
                 Pressable(
                   onTap: () => requireSignIn(context, reason: 'Sign in and Samgeet\'s colours will follow the mood of your music.'),
                   child: const _Pill(icon: Icons.lock_outline_rounded, label: 'Mood colours · Sign in'),
@@ -445,6 +448,7 @@ class _SwipeDownToMinimizeState extends State<_SwipeDownToMinimize> with SingleT
   @override
   Widget build(BuildContext context) {
     final radius = math.min(28.0, _dy / 3);
+    final progress = (_dy / MediaQuery.sizeOf(context).height).clamp(0.0, 1.0);
     return Listener(
       onPointerDown: _down,
       onPointerMove: _move,
@@ -455,13 +459,25 @@ class _SwipeDownToMinimizeState extends State<_SwipeDownToMinimize> with SingleT
           if (n.metrics.axis == Axis.vertical) _atTop = n.metrics.pixels <= n.metrics.minScrollExtent + 0.5;
           return false;
         },
-        child: Transform.translate(
-          offset: Offset(0, _dy),
-          child: ClipRRect(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(radius)),
-            child: widget.child,
+        child: Stack(children: [
+          // While dragging, the app underneath is blurred and dimmed, clearing as the player moves away.
+          if (_dy > 0)
+            Positioned.fill(
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 16 * (1 - progress), sigmaY: 16 * (1 - progress)),
+                  child: ColoredBox(color: Colors.black.withValues(alpha: 0.45 * (1 - progress))),
+                ),
+              ),
+            ),
+          Transform.translate(
+            offset: Offset(0, _dy),
+            child: ClipRRect(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(radius)),
+              child: widget.child,
+            ),
           ),
-        ),
+        ]),
       ),
     );
   }

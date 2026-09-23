@@ -83,3 +83,51 @@ class MoodDetector {
     return best;
   }
 }
+
+/// Decides when the app's colours should follow the music, so they change with
+/// the *session's* mood rather than flickering on every song.
+///
+/// The colours move to a mood once [needed] of the last [window] songs share it
+/// (3 of 5: one odd song in between doesn't reset anything), and stay put for
+/// at least [hold] after a change so they can't flip back and forth.
+class MoodMomentum {
+  final int window;
+  final int needed;
+  final Duration hold;
+  final DateTime Function() _now;
+
+  final List<Mood?> _recent = [];
+  Mood? current;
+  DateTime? _changedAt;
+
+  MoodMomentum({
+    this.current,
+    this.window = 5,
+    this.needed = 3,
+    this.hold = const Duration(minutes: 5),
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now;
+
+  /// Records the mood of a song that just started. Returns true when the
+  /// colours should change (then [current] is the new mood).
+  bool played(Mood? songMood) {
+    _recent.add(songMood);
+    if (_recent.length > window) _recent.removeAt(0);
+
+    final counts = <Mood, int>{};
+    for (final m in _recent) {
+      if (m != null) counts[m] = (counts[m] ?? 0) + 1;
+    }
+    Mood? leader;
+    for (final e in counts.entries) {
+      if (e.value >= needed && (leader == null || e.value > counts[leader]!)) leader = e.key;
+    }
+    if (leader == null || leader == current) return false;
+
+    final now = _now();
+    if (_changedAt != null && now.difference(_changedAt!) < hold) return false;
+    current = leader;
+    _changedAt = now;
+    return true;
+  }
+}

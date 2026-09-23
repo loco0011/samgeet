@@ -82,31 +82,47 @@ class MoodPaletteTween extends Tween<MoodPalette> {
 }
 
 /// Watches what is playing (and the chosen accent style) and decides the app's palette.
+///
+/// The colours follow the mood of the *session*, not of each song: see
+/// [MoodMomentum] (3 of the last 5 songs, then held for at least 5 minutes).
 class MoodController extends ChangeNotifier {
   final PlayerController player;
   final LibraryStore library;
-  Mood? mood;
+  final MoodMomentum _momentum;
+
+  /// The mood the colours have settled on.
+  Mood? get mood => _momentum.current;
+
+  /// The mood of the song playing right now (may differ from [mood]).
+  Mood? songMood;
+
   MoodPalette palette = MoodPalette.brand;
   String? _key;
   String _accent;
   bool _signedIn;
+  bool _follow;
 
-  /// True when the app is actually wearing the mood colours (signed in + a mood was detected).
-  bool get themed => _signedIn && mood != null;
+  /// True when the app is actually wearing mood colours (signed in, switched on, a mood has settled).
+  bool get themed => _signedIn && _follow && mood != null;
 
-  MoodController(this.player, this.library)
-      : _accent = library.accent,
-        _signedIn = library.signedIn {
-    palette = MoodPalette.resolve(mood: null, signedIn: _signedIn, accent: _accent);
+  MoodController(this.player, this.library, {MoodMomentum? momentum})
+      : _momentum = momentum ?? MoodMomentum(current: Mood.values.where((m) => m.name == library.themeMood).firstOrNull),
+        _accent = library.accent,
+        _signedIn = library.signedIn,
+        _follow = library.moodColors {
+    palette = _resolve();
     player.addListener(_update);
     library.addListener(_libraryChanged);
     _update();
   }
 
+  MoodPalette _resolve() => MoodPalette.resolve(mood: _follow ? mood : null, signedIn: _signedIn, accent: _accent);
+
   void _libraryChanged() {
-    if (library.accent == _accent && library.signedIn == _signedIn) return;
+    if (library.accent == _accent && library.signedIn == _signedIn && library.moodColors == _follow) return;
     _accent = library.accent;
     _signedIn = library.signedIn;
+    _follow = library.moodColors;
     _apply();
   }
 
@@ -115,18 +131,16 @@ class MoodController extends ChangeNotifier {
     final key = t == null ? null : '${t.id}|${player.sessionContext}';
     if (key == _key) return;
     _key = key;
-    mood = t == null ? null : MoodDetector.detect(t, context: player.sessionContext);
+    if (t == null) return; // stopping keeps the colours the session settled on
+    songMood = MoodDetector.detect(t, context: player.sessionContext);
+    if (_momentum.played(songMood)) library.rememberThemeMood(mood?.name);
     _apply();
   }
 
   void _apply() {
-    final next = MoodPalette.resolve(mood: mood, signedIn: _signedIn, accent: _accent);
-    if (identical(next, palette)) {
-      notifyListeners(); // 'themed' may have changed even though the colours did not
-      return;
-    }
-    palette = next;
-    notifyListeners();
+    final next = _resolve();
+    if (!identical(next, palette)) palette = next;
+    notifyListeners(); // 'themed' or the song's mood may have changed even when the colours did not
   }
 
   @override

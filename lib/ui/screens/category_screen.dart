@@ -39,12 +39,19 @@ class _CategoryScreenState extends State<CategoryScreen> {
     final api = context.read<SaavnApi>();
     final c = widget.category;
     _future = () async {
-      final results = await Future.wait([
+      final results = await Future.wait<List<Object>>([
         api.searchSongs(c.songQuery ?? c.query, n: 40),
         api.searchPlaylists(c.query, n: 12).catchError((_) => <MediaCard>[]),
+        // Hand-picked songs: the best match for each phrase, skipping any the catalogue lacks.
+        Future.wait(c.picks.map((p) => api.findSongs(p, n: 3).then((r) => r.songs).catchError((_) => <Track>[])))
+            .then((found) => [for (final l in found) ...l.where((t) => t.isPlayable).take(1)]),
       ]);
-      final songs = (results[0] as List<Track>).where((t) => t.isPlayable).toList();
-      return _CategoryData(songs, results[1] as List<MediaCard>);
+      final seen = <String>{};
+      final songs = [
+        for (final t in [...results[2].cast<Track>(), ...results[0].cast<Track>()])
+          if (t.isPlayable && seen.add(t.id)) t,
+      ];
+      return _CategoryData(songs, results[1].cast<MediaCard>());
     }();
   }
 

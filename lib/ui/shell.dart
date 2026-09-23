@@ -18,6 +18,7 @@ import 'theme.dart';
 import 'widgets/common.dart';
 import 'widgets/glass.dart';
 import 'widgets/mini_player.dart';
+import 'widgets/update_dialog.dart';
 
 /// Bottom navigation (phones) or a side rail (tablets / landscape), with one
 /// navigator per tab so the mini-player and navigation stay put while you dive
@@ -77,6 +78,10 @@ class _AppShellState extends State<AppShell> {
     _linkSub = _deepLinks.links.listen(_openLink);
     _deepLinks.initial().then((l) {
       if (l != null) _openLink(l);
+    });
+    // A newer release on GitHub? Ask once the home screen has settled.
+    Future.delayed(const Duration(seconds: 4), () {
+      if (mounted) checkForUpdate(context);
     });
   }
 

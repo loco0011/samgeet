@@ -17,6 +17,9 @@ class Category {
   /// Language for the radio seed (defaults to hindi).
   final String language;
 
+  /// Hand-picked songs (search phrases) shown first, before the search results.
+  final List<String> picks;
+
   const Category({
     required this.id,
     required this.title,
@@ -26,6 +29,7 @@ class Category {
     this.subtitle = '',
     this.songQuery,
     this.language = 'hindi',
+    this.picks = const [],
   });
 }
 
@@ -136,6 +140,23 @@ class Catalog {
   static const baul = Category(
       id: 'baul', title: 'Baul & Folk', subtitle: 'Lokgeeti', query: 'baul', songQuery: 'baul gaan', language: 'bengali', icon: Icons.landscape_rounded, colors: [Color(0xFFB24592), Color(0xFFF15F79)]);
 
+  // ---- festivals ----
+  static const durgaPuja = Category(
+      id: 'durga_puja', title: 'Durga Puja', subtitle: 'Pujo hits · দুর্গাপুজো', query: 'durga puja', songQuery: 'durga puja songs', language: 'bengali',
+      icon: Icons.festival_rounded, colors: [Color(0xFFD50000), Color(0xFFFFAB00)],
+      picks: [
+        'Dhak Baja Kashor Baja Shreya Ghoshal', 'Dugga Elo Monali Thakur', 'Bolo Dugga Maiki Nakash Aziz', 'Dugga Ma Arijit Singh',
+        'Aami Shotti Bolchi', 'Durge Durge Durgatinashini Asha Bhosle', 'Elo Re Elo Durga Maa', 'Ebar Aamar Uma Eley',
+        'Pujo Pujo Gondho Anupam Roy', 'Dhunuchi Nach', 'Pujor Dhaak Bickram Ghosh', 'Jai Maa Durga', 'Pujor Gaan Mita Chatterjee',
+      ]);
+  static const mahalaya = Category(
+      id: 'mahalaya', title: 'Mahalaya', subtitle: 'Mahishasura Mardini · stotras', query: 'mahalaya', songQuery: 'mahishasura mardini', language: 'bengali',
+      icon: Icons.brightness_7_rounded, colors: [Color(0xFFFF6F00), Color(0xFF6A1B9A)],
+      picks: [
+        'Jago Durga Dashapraharanadharinee', 'Jago Durga Manohar Ghosal', 'Bajlo Tomar Alor Benu', 'Ya Devi Sarvabhuteshu',
+        'Aigiri Nandini', 'Maa Durga Aarti Shoma Banerjee', 'Durga Chalisa',
+      ]);
+
   // ---- Classical & traditional ----
   static const hindustani = Category(
       id: 'hindustani', title: 'Hindustani', subtitle: 'Classical', query: 'hindustani classical', songQuery: 'hindustani classical vocal', icon: Icons.piano_rounded, colors: [Color(0xFF614385), Color(0xFF516395)]);
@@ -184,7 +205,7 @@ class Catalog {
     CatalogGroup('era', 'Time machine', 'Journey through the decades',
         [trending, latest, era10, era00, era90, era80, era70, golden]),
     CatalogGroup('bengali', 'Bengali corner', 'বাংলা সঙ্গীত',
-        [bengali, rabindra, nazrul, bengaliOld, bengaliAdhunik, bengaliBand, bengaliFilm, baul]),
+        [bengali, rabindra, nazrul, bengaliOld, bengaliAdhunik, bengaliBand, bengaliFilm, baul, durgaPuja, mahalaya]),
     CatalogGroup('india', 'Indian languages', 'Music from across India',
         [hindi, punjabi, tamil, telugu, malayalam, kannada, marathi, gujarati, bhojpuri, odia, assamese, haryanvi]),
     CatalogGroup('classical', 'Classical & traditional', 'Timeless forms',

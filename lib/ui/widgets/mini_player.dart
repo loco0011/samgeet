@@ -216,6 +216,9 @@ class _PlayPause extends StatelessWidget {
 }
 
 void openNowPlaying(BuildContext context) {
+  // Let go of the search box first. Otherwise closing the player hands focus
+  // straight back to it and the keyboard pops up again.
+  FocusManager.instance.primaryFocus?.unfocus();
   Navigator.of(context, rootNavigator: true).push(PageRouteBuilder(
     // Not opaque: swiping the player down reveals the app underneath.
     opaque: false,

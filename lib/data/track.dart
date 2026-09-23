@@ -35,6 +35,9 @@ enum AudioQuality {
   const AudioQuality(this.kbps, this.label, this.detail);
 }
 
+/// Decodes the HTML entities the catalogue leaves in titles (`&quot;` etc.).
+String cleanText(String s) => _clean(s);
+
 String _clean(String s) => s
     .replaceAll('&quot;', '"')
     .replaceAll('&amp;', '&')

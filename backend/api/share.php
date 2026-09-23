@@ -61,7 +61,7 @@ header('Content-Type: text/html; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 header('Cache-Control: public, max-age=300');
-header("Content-Security-Policy: default-src 'none'; img-src 'self' https://*.saavncdn.com data:; style-src 'nonce-$nonce'; script-src 'nonce-$nonce'; base-uri 'none'; form-action 'none'");
+header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; img-src 'self' https://*.saavncdn.com data:; style-src 'nonce-$nonce'; script-src 'nonce-$nonce'; base-uri 'none'; form-action 'none'");
 ?>
 <!doctype html>
 <html lang="en">

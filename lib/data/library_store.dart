@@ -65,6 +65,12 @@ class LibraryStore extends ChangeNotifier {
   /// Which dark accent style the app wears when a song has no clear mood.
   String accent = 'ember';
 
+  /// Whether the colours follow the mood of the music (signed-in listeners).
+  bool moodColors = true;
+
+  /// The mood the colours last settled on, so the app reopens in the same colours.
+  String? themeMood;
+
   final Set<String> _favIds = {};
   final Set<String> _dirty = {};
   Timer? _saveTimer;
@@ -104,6 +110,8 @@ class LibraryStore extends ChangeNotifier {
     autoplay = _prefs.getBool('autoplay') ?? true;
     languages = _prefs.getStringList('languages') ?? languages;
     accent = _prefs.getString('accent') ?? 'ember';
+    moodColors = _prefs.getBool('moodColors') ?? true;
+    themeMood = _prefs.getString('themeMood');
     try {
       final p = _prefs.getString('profile');
       if (p != null) profile = Profile.fromJson(Map<String, dynamic>.from(jsonDecode(p)));
@@ -145,6 +153,12 @@ class LibraryStore extends ChangeNotifier {
           await _prefs.setBool('autoplay', autoplay);
           await _prefs.setStringList('languages', languages);
           await _prefs.setString('accent', accent);
+          await _prefs.setBool('moodColors', moodColors);
+          if (themeMood == null) {
+            await _prefs.remove('themeMood');
+          } else {
+            await _prefs.setString('themeMood', themeMood!);
+          }
       }
     }
   }
@@ -329,6 +343,19 @@ class LibraryStore extends ChangeNotifier {
     if (accent == id) return;
     accent = id;
     _changed('settings');
+  }
+
+  void setMoodColors(bool v) {
+    if (moodColors == v) return;
+    moodColors = v;
+    _changed('settings');
+  }
+
+  /// Remembers the mood colours without telling listeners (nothing else needs to redraw).
+  void rememberThemeMood(String? m) {
+    if (themeMood == m) return;
+    themeMood = m;
+    _touch('settings');
   }
 
   void setLanguages(List<String> l) {

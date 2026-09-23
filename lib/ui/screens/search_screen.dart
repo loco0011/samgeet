@@ -37,6 +37,9 @@ class _SearchScreenState extends State<SearchScreen> {
   String _typed = '';
   String? _submitted;
   List<String> _suggestions = const [];
+  // Songs found while typing, so results show up without pressing search.
+  List<Track> _live = const [];
+  bool _liveLoading = false;
   int _suggestSeq = 0;
   Future<_Results>? _results;
 
@@ -51,17 +54,37 @@ class _SearchScreenState extends State<SearchScreen> {
   void _onChanged(String v) {
     setState(() => _typed = v);
     _debounce?.cancel();
+    final seq = ++_suggestSeq;
     if (v.trim().length < 2) {
-      setState(() => _suggestions = const []);
+      setState(() {
+        _suggestions = const [];
+        _live = const [];
+        _liveLoading = false;
+      });
       return;
     }
-    _debounce = Timer(const Duration(milliseconds: 280), () async {
-      final seq = ++_suggestSeq;
-      try {
-        final s = await context.read<SaavnApi>().suggestions(v);
+    setState(() => _liveLoading = true);
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      final api = context.read<SaavnApi>();
+      api.suggestions(v).then((s) {
         if (mounted && seq == _suggestSeq) setState(() => _suggestions = s);
-      } catch (_) {}
+      }, onError: (_) {});
+      api.findSongs(v, n: 15).then((r) {
+        if (mounted && seq == _suggestSeq) {
+          setState(() {
+            _live = r.songs.where((t) => t.isPlayable).toList();
+            _liveLoading = false;
+          });
+        }
+      }, onError: (_) {
+        if (mounted && seq == _suggestSeq) setState(() => _liveLoading = false);
+      });
     });
+  }
+
+  void _play(Track t) {
+    _focus.unfocus();
+    context.read<PlayerController>().playSingle(t);
   }
 
   void _submit(String q) {
@@ -75,6 +98,8 @@ class _SearchScreenState extends State<SearchScreen> {
       _typed = query;
       _submitted = query;
       _suggestions = const [];
+      _suggestSeq++; // drop live results still on their way
+      _liveLoading = false;
       _results = () async {
         Future<List<List<Object>>> others(String q) => Future.wait<List<Object>>([
               api.searchAlbums(q, n: 12).catchError((_) => <MediaCard>[]),
@@ -105,6 +130,9 @@ class _SearchScreenState extends State<SearchScreen> {
       _submitted = null;
       _results = null;
       _suggestions = const [];
+      _live = const [];
+      _liveLoading = false;
+      _suggestSeq++;
     });
   }
 
@@ -140,19 +168,36 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _body(BuildContext context) {
-    if (_submitted != null && _results != null && _suggestions.isEmpty) {
+    final typed = _typed.trim();
+    if (_submitted != null && _results != null && typed == _submitted) {
       return KeyedSubtree(key: ValueKey(_submitted), child: _ResultsView(future: _results!, query: _submitted!));
     }
-    if (_typed.trim().length >= 2 && _suggestions.isNotEmpty) {
+    if (typed.length >= 2) {
+      // While typing: a few suggestions, then matching songs to play straight away.
       return ListView(
         key: const ValueKey('suggest'),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.only(bottom: 30),
         children: [
-          for (final s in _suggestions)
+          for (final s in _suggestions.take(4))
             ListTile(
+              dense: true,
               leading: const Icon(Icons.north_west_rounded, size: 18, color: AppColors.muted),
               title: Text(s),
               onTap: () => _submit(s),
             ),
+          if (_live.isNotEmpty) ...[
+            const SectionHeader('Songs'),
+            for (final t in _live) TrackTile(track: t, showLike: true, onTap: () => _play(t)),
+            ListTile(
+              leading: const Icon(Icons.search_rounded, color: AppColors.muted),
+              title: Text('See all results for "$typed"'),
+              onTap: () => _submit(typed),
+            ),
+          ] else if (_liveLoading)
+            const TrackListSkeleton(count: 5)
+          else if (_suggestions.isEmpty)
+            EmptyState(icon: Icons.search_off_rounded, title: 'No songs found', message: 'Press search to look everywhere for "$typed".'),
         ],
       );
     }
