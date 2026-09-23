@@ -19,6 +19,10 @@ class DiscPlayer extends StatefulWidget {
   final Color glow;
   const DiscPlayer({super.key, required this.player, required this.track, required this.size, required this.glow});
 
+  /// True while the listener is dragging round the seek ring, so the
+  /// swipe-down-to-minimize gesture on the player screen stays out of the way.
+  static final ValueNotifier<bool> scrubbing = ValueNotifier(false);
+
   /// Height including the time labels underneath.
   static double heightFor(double size) => size + 36;
 
@@ -31,6 +35,12 @@ class _DiscPlayerState extends State<DiscPlayer> with TickerProviderStateMixin {
   late final AnimationController _spin = AnimationController(vsync: this, duration: const Duration(seconds: 16));
   double? _drag; // 0..1 while the user drags the ring
   bool _dragging = false;
+  bool _onRingDown = false;
+
+  void _ringTouch(bool down) {
+    _onRingDown = down;
+    DiscPlayer.scrubbing.value = down;
+  }
 
   @override
   void initState() {
@@ -52,6 +62,7 @@ class _DiscPlayerState extends State<DiscPlayer> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    if (_onRingDown) DiscPlayer.scrubbing.value = false;
     widget.player.removeListener(_sync);
     _pulse.dispose();
     _spin.dispose();
@@ -102,7 +113,12 @@ class _DiscPlayerState extends State<DiscPlayer> with TickerProviderStateMixin {
           SizedBox(
             width: s,
             height: s,
-            child: GestureDetector(
+            child: Listener(
+              // Flag a touch on the ring right away, before the pan gesture starts.
+              onPointerDown: (e) => _ringTouch(_onRing(e.localPosition)),
+              onPointerUp: (_) => _ringTouch(false),
+              onPointerCancel: (_) => _ringTouch(false),
+              child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onPanStart: (d) {
                 if (_onRing(d.localPosition)) {
@@ -175,6 +191,7 @@ class _DiscPlayerState extends State<DiscPlayer> with TickerProviderStateMixin {
                   ),
                 ),
               ]),
+            ),
             ),
           ),
           const SizedBox(height: 6),

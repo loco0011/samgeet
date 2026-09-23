@@ -41,13 +41,17 @@ class PlayerController extends ChangeNotifier {
   int index = -1;
   bool shuffle = false;
   LoopMode loopMode = LoopMode.off;
-  double speed = 1.0;
   bool loadingMore = false;
 
   /// What started this session (a category query) — keeps refills on-theme.
   String? sessionContext;
 
   List<String> _origin = []; // ids in their un-shuffled order
+
+  // Bumped whenever a new queue starts, so a radio refill still running for
+  // the old queue can't append its songs to the new one.
+  int _session = 0;
+  int? _refillFor;
   final Set<String> _skipped = {};
   final Set<String> _retried = {};
 
@@ -122,6 +126,7 @@ class PlayerController extends ChangeNotifier {
     }
 
     _finalizeCurrent(); // credit the song we're leaving before the queue is replaced
+    _session++;
     _curId = null;
     sessionContext = context;
     _skipped.clear();
@@ -196,12 +201,6 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setSpeed(double s) async {
-    speed = s;
-    await player.setSpeed(s);
-    notifyListeners();
-  }
-
   // ---------- queue editing ----------
   Future<void> _replaceUpcoming(List<Track> tracks) async {
     for (var i = queue.length - 1; i > index; i--) {
@@ -267,12 +266,14 @@ class PlayerController extends ChangeNotifier {
 
   // ---------- smart radio ----------
   Future<void> _maybeRefill({bool force = false}) async {
-    if (loadingMore || queue.isEmpty) return;
+    if (queue.isEmpty || _refillFor == _session) return;
     if (!library.autoplay && !force) return;
     if (loopMode != LoopMode.off && !force) return;
     final remaining = queue.length - index - 1;
     if (remaining >= 3 && !force) return;
 
+    final session = _session;
+    _refillFor = session;
     loadingMore = true;
     notifyListeners();
     try {
@@ -287,6 +288,7 @@ class PlayerController extends ChangeNotifier {
         take: 12,
       );
       final ready = await _makePlayable(batch);
+      if (session != _session) return; // a different queue started meanwhile
       if (ready.isNotEmpty) {
         queue.addAll(ready);
         _origin.addAll(ready.map((t) => t.id));
@@ -295,8 +297,11 @@ class PlayerController extends ChangeNotifier {
     } catch (_) {
       // Radio is a bonus; never interrupt playback because it failed.
     } finally {
-      loadingMore = false;
-      notifyListeners();
+      if (_refillFor == session) {
+        _refillFor = null;
+        loadingMore = false;
+        notifyListeners();
+      }
     }
   }
 

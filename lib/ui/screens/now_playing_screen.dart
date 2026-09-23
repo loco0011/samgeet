@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
@@ -42,7 +43,8 @@ class NowPlayingScreen extends StatelessWidget {
           final moodC = context.watch<MoodController>();
           final base = animated ?? color;
           final accent = !moodC.themed ? base : Color.lerp(base, moodC.palette.colors[1], 0.55)!;
-          return Scaffold(
+          return _SwipeDownToMinimize(
+              child: Scaffold(
             body: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -117,7 +119,7 @@ class NowPlayingScreen extends StatelessWidget {
                 }),
               ),
             ),
-          );
+          ));
         },
       ),
     );
@@ -321,7 +323,6 @@ class _ActionRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
         _Action(icon: Icons.bedtime_outlined, label: 'Sleep', active: sleepOn, onTap: () => showSleepSheet(context)),
-        _Action(icon: Icons.speed_rounded, label: '${player.speed}x', active: player.speed != 1.0, onTap: () => showSpeedSheet(context)),
         _Action(icon: Icons.lyrics_outlined, label: 'Lyrics', onTap: () => showLyricsSheet(context, track)),
         _Action(icon: Icons.playlist_add_rounded, label: 'Playlist', onTap: () => showPlaylistPicker(context, [track])),
         _Action(icon: Icons.ios_share_rounded, label: 'Share', onTap: () => ShareService.shareTrack(track)),
@@ -349,6 +350,118 @@ class _Action extends StatelessWidget {
           const SizedBox(height: 4),
           Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? AppColors.pink : Colors.white60)),
         ]),
+      ),
+    );
+  }
+}
+
+/// Drag the player down to minimize it back to the mini player.
+///
+/// Watches raw pointer events rather than competing in the gesture arena, so
+/// it works over the whole screen (buttons, artwork, the scroll view) as long
+/// as the swipe is mostly downward, the content is scrolled to the top and the
+/// listener isn't dragging the seek ring.
+class _SwipeDownToMinimize extends StatefulWidget {
+  final Widget child;
+  const _SwipeDownToMinimize({required this.child});
+
+  @override
+  State<_SwipeDownToMinimize> createState() => _SwipeDownToMinimizeState();
+}
+
+class _SwipeDownToMinimizeState extends State<_SwipeDownToMinimize> with SingleTickerProviderStateMixin {
+  static const _slop = 18.0;
+
+  late final AnimationController _settle = AnimationController(vsync: this, duration: const Duration(milliseconds: 220))
+    ..addListener(() => setState(() => _dy = _settleFrom * (1 - Curves.easeOutCubic.transform(_settle.value))));
+  double _settleFrom = 0;
+
+  double _dy = 0;
+  bool _atTop = true;
+  int? _pointer;
+  Offset _start = Offset.zero;
+  bool _engaged = false;
+  bool _rejected = false;
+  VelocityTracker? _velocity;
+
+  @override
+  void dispose() {
+    _settle.dispose();
+    super.dispose();
+  }
+
+  void _snapBack() {
+    if (_dy == 0) return;
+    _settleFrom = _dy;
+    _settle.forward(from: 0);
+  }
+
+  void _down(PointerDownEvent e) {
+    if (_pointer != null) return; // a second finger doesn't restart the drag
+    _settle.stop();
+    _pointer = e.pointer;
+    _start = e.position;
+    _engaged = false;
+    _rejected = !_atTop;
+    _velocity = VelocityTracker.withKind(e.kind)..addPosition(e.timeStamp, e.position);
+  }
+
+  void _move(PointerMoveEvent e) {
+    if (e.pointer != _pointer || _rejected) return;
+    _velocity?.addPosition(e.timeStamp, e.position);
+    if (DiscPlayer.scrubbing.value) {
+      _rejected = true;
+      _engaged = false;
+      _snapBack();
+      return;
+    }
+    final d = e.position - _start;
+    if (!_engaged) {
+      if (d.distance < _slop) return;
+      if (d.dy > 0 && d.dy > d.dx.abs() * 1.4) {
+        _engaged = true;
+      } else {
+        _rejected = true; // sideways swipe (skip song) or an upward scroll
+        return;
+      }
+    }
+    setState(() => _dy = math.max(0, d.dy - _slop));
+  }
+
+  void _up(PointerEvent e) {
+    if (e.pointer != _pointer) return;
+    _pointer = null;
+    if (!_engaged) return;
+    _engaged = false;
+    final v = _velocity?.getVelocity().pixelsPerSecond.dy ?? 0;
+    final h = context.size?.height ?? 800;
+    if (_dy > h * 0.22 || (v > 900 && _dy > 40)) {
+      Navigator.of(context).maybePop();
+    } else {
+      _snapBack();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = math.min(28.0, _dy / 3);
+    return Listener(
+      onPointerDown: _down,
+      onPointerMove: _move,
+      onPointerUp: _up,
+      onPointerCancel: _up,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (n) {
+          if (n.metrics.axis == Axis.vertical) _atTop = n.metrics.pixels <= n.metrics.minScrollExtent + 0.5;
+          return false;
+        },
+        child: Transform.translate(
+          offset: Offset(0, _dy),
+          child: ClipRRect(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(radius)),
+            child: widget.child,
+          ),
+        ),
       ),
     );
   }

@@ -76,17 +76,23 @@ class _SearchScreenState extends State<SearchScreen> {
       _submitted = query;
       _suggestions = const [];
       _results = () async {
-        final r = await Future.wait([
-          api.searchSongs(query, n: 30),
-          api.searchAlbums(query, n: 12).catchError((_) => <MediaCard>[]),
-          api.searchPlaylists(query, n: 12).catchError((_) => <MediaCard>[]),
-          api.searchArtists(query, n: 12).catchError((_) => <ArtistRef>[]),
-        ]);
+        Future<List<List<Object>>> others(String q) => Future.wait<List<Object>>([
+              api.searchAlbums(q, n: 12).catchError((_) => <MediaCard>[]),
+              api.searchPlaylists(q, n: 12).catchError((_) => <MediaCard>[]),
+              api.searchArtists(q, n: 12).catchError((_) => <ArtistRef>[]),
+            ]);
+        final othersF = others(query); // never fails, so it's safe to start first
+        final songs = await api.findSongs(query, n: 30);
+        var rest = await othersF;
+        // A misspelt query finds songs through its corrected form; use that
+        // for the other tabs too if the typed spelling found nothing there.
+        final fixed = songs.correctedQuery;
+        if (fixed != null && rest.every((l) => l.isEmpty)) rest = await others(fixed);
         return _Results(
-          (r[0] as List<Track>).where((t) => t.isPlayable).toList(),
-          r[1] as List<MediaCard>,
-          r[2] as List<MediaCard>,
-          r[3] as List<ArtistRef>,
+          songs.songs.where((t) => t.isPlayable).toList(),
+          rest[0].cast<MediaCard>(),
+          rest[1].cast<MediaCard>(),
+          rest[2].cast<ArtistRef>(),
         );
       }();
     });

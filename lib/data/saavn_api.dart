@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:http/http.dart' as http;
 
+import 'fuzzy.dart';
 import 'track.dart';
 
 class HomeData {
@@ -35,6 +37,15 @@ class ArtistPage {
     this.albums = const [],
     this.similar = const [],
   });
+}
+
+class SongSearch {
+  final List<Track> songs;
+
+  /// The spelling that actually found the best match, when it differs from
+  /// what was typed (used to fill the other result tabs).
+  final String? correctedQuery;
+  const SongSearch(this.songs, {this.correctedQuery});
 }
 
 class SearchSuggestions {
@@ -138,6 +149,60 @@ class SaavnApi {
   Future<List<Track>> searchSongs(String query, {int n = 30, int page = 1}) async {
     final j = await _get('search.getResults', {'q': query, 'p': '$page', 'n': '$n'});
     return _tracks(j['results']);
+  }
+
+  /// Song search that forgives typos and partial names.
+  ///
+  /// The catalogue search copes with small misspellings but returns nothing
+  /// when one word of a longer query is wrong ("blinding lite weeknd"). When
+  /// the direct results are thin or don't look like what was typed, this also
+  /// tries the autocomplete's guesses and the query with each word left out,
+  /// then ranks everything by how closely it matches the query.
+  Future<SongSearch> findSongs(String query, {int n = 30}) async {
+    final q = query.trim();
+    final direct = await Future.wait([
+      searchSongs(q, n: n),
+      suggestions(q).catchError((_) => <String>[]),
+    ]);
+    final primary = direct[0] as List<Track>;
+    final guesses = direct[1] as List<String>;
+
+    double best(List<Track> l) => l.take(5).fold(0.0, (m, t) => math.max(m, Fuzzy.songScore(q, t)));
+    final strong = primary.length >= 8 && best(primary) >= 0.8;
+    if (strong) return SongSearch(primary);
+
+    final lower = q.toLowerCase();
+    final alternatives = <String>{
+      ...guesses.where((g) => g.toLowerCase() != lower).take(2),
+      ...Fuzzy.dropOneWord(q),
+    }.take(6).toList();
+    final extra = await Future.wait([
+      for (final a in alternatives) searchSongs(a, n: 15).catchError((_) => <Track>[]),
+    ]);
+
+    // Direct results keep a head start; the rest must actually look like the query.
+    final scored = <String, ({Track track, double score, String from})>{};
+    void add(List<Track> list, String from, double head) {
+      for (var i = 0; i < list.length; i++) {
+        final t = list[i];
+        final match = Fuzzy.songScore(q, t);
+        if (from != q && match < 0.4) continue;
+        final s = match + head * (1 - i / math.max(1, list.length));
+        final prev = scored[t.id];
+        if (prev == null || s > prev.score) scored[t.id] = (track: t, score: s, from: from);
+      }
+    }
+
+    add(primary, q, 0.25);
+    for (var i = 0; i < alternatives.length; i++) {
+      add(extra[i], alternatives[i], 0.12);
+    }
+    final ranked = scored.values.toList()..sort((a, b) => b.score.compareTo(a.score));
+    final top = ranked.isEmpty ? null : ranked.first;
+    return SongSearch(
+      ranked.take(n).map((e) => e.track).toList(),
+      correctedQuery: top != null && top.from != q ? top.from : null,
+    );
   }
 
   Future<List<MediaCard>> searchPlaylists(String query, {int n = 12}) async {

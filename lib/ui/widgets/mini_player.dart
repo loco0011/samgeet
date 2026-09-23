@@ -217,7 +217,8 @@ class _PlayPause extends StatelessWidget {
 
 void openNowPlaying(BuildContext context) {
   Navigator.of(context, rootNavigator: true).push(PageRouteBuilder(
-    opaque: true,
+    // Not opaque: swiping the player down reveals the app underneath.
+    opaque: false,
     transitionDuration: const Duration(milliseconds: 420),
     reverseTransitionDuration: const Duration(milliseconds: 320),
     pageBuilder: (_, _, _) => const NowPlayingScreen(),

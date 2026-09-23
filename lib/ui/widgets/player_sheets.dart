@@ -218,34 +218,3 @@ class _SleepCountdownState extends State<_SleepCountdown> {
     return Text('${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')} left', style: const TextStyle(color: AppColors.muted));
   }
 }
-
-// ---------------- Speed ----------------
-Future<void> showSpeedSheet(BuildContext context) {
-  final p = context.read<PlayerController>();
-  return showModalBottomSheet<void>(
-    context: context,
-    useRootNavigator: true,
-    builder: (sheet) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          _grabber(),
-          const SizedBox(height: 14),
-          const Align(alignment: Alignment.centerLeft, child: Text('Playback speed', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 20))),
-          const SizedBox(height: 16),
-          Wrap(spacing: 10, runSpacing: 10, children: [
-            for (final s in const [0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0])
-              ChoiceChip(
-                label: Text('${s}x'),
-                selected: p.speed == s,
-                onSelected: (_) {
-                  p.setSpeed(s);
-                  Navigator.of(sheet).pop();
-                },
-              ),
-          ]),
-        ]),
-      ),
-    ),
-  );
-}

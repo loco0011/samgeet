@@ -77,9 +77,13 @@ class Recommender {
   }) {
     final random = rng ?? math.Random();
     final seen = <String>{seed.id, ...exclude};
+    // One version per song: no "(Lofi Flip)" or "(Slowed)" copy of the seed or of each other.
+    final titles = <String>{baseTitle(seed.title)};
     final scored = <_Scored>[];
     for (final c in pool) {
       if (!seen.add(c.track.id)) continue;
+      final base = baseTitle(c.track.title);
+      if (base.isNotEmpty && !titles.add(base)) continue;
       final jitter = (random.nextDouble() - 0.5) * 0.10; // keeps refreshes from feeling identical
       scored.add(_Scored(c.track, baseScore(seed, c, taste, skipped: skipped) + jitter));
     }
@@ -109,6 +113,14 @@ class Recommender {
     }
     return picks;
   }
+
+  /// A title without its "(From ...)", "[Remix]" or " - Lofi" decorations.
+  static String baseTitle(String title) => title
+      .toLowerCase()
+      .replaceAll(RegExp(r'[([].*'), '')
+      .split(' - ')
+      .first
+      .replaceAll(RegExp(r'[^\p{L}\p{N}]+', unicode: true), '');
 
   static bool _sharesArtist(Track a, Track b) {
     final ka = a.artists.map(TasteProfile.artistKey).toSet();
