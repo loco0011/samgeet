@@ -14,6 +14,7 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
+        android:appCategory="audio"
         android:usesCleartextTraffic="false">
         <activity
             android:name=".MainActivity"
@@ -30,6 +31,19 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Marks Samgeet as a music app, so Bixby, Google Assistant and the system's
+                 music-player pickers list it. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.APP_MUSIC" />
+            </intent-filter>
+            <!-- "Play <song> on Samgeet": the assistant sends the spoken query here. -->
+            <intent-filter>
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
 
             <!-- Tapping a shared https://api.sambitmaity.fun/share.php link opens the app (verified via

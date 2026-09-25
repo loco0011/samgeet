@@ -86,6 +86,8 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _openLink(String raw) async {
+    final spoken = parseVoiceQuery(raw);
+    if (spoken != null) return _playSpoken(spoken);
     final link = parseSharedLink(raw);
     if (link == null || !mounted) return;
     final api = context.read<SaavnApi>();
@@ -112,6 +114,23 @@ class _AppShellState extends State<AppShell> {
           ),
         );
         if (ok == true && mounted) await importPlaylistIds(context, link.name, link.ids);
+    }
+  }
+
+  /// "Play `<query>` on Samgeet" from Bixby / Google Assistant: play the best match.
+  /// With no query ("play music on Samgeet"), carry on with whatever was queued.
+  Future<void> _playSpoken(String query) async {
+    final player = context.read<PlayerController>();
+    if (query.isEmpty) {
+      if (player.queue.isNotEmpty && !player.player.playing) await player.togglePlay();
+      return;
+    }
+    try {
+      final found = await context.read<SaavnApi>().searchSongs(query, n: 10);
+      if (found.isEmpty) throw ApiException('Nothing found for "$query"');
+      await player.playSingle(found.first, context: 'a voice request');
+    } catch (e) {
+      if (mounted) toast(context, 'Could not play that: $e');
     }
   }
 

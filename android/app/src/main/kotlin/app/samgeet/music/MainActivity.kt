@@ -1,10 +1,13 @@
 package app.samgeet.music
 
 import android.Manifest
+import android.app.SearchManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -48,6 +51,14 @@ class MainActivity : AudioServiceActivity() {
         linkFrom(intent)?.let { channel?.invokeMethod("link", it) }
     }
 
-    private fun linkFrom(intent: Intent?): String? =
-        if (intent?.action == Intent.ACTION_VIEW) intent.dataString else null
+    // A voice "play <query>" request (Bixby, Google Assistant) becomes samgeet://play?q=<query>, so Dart
+    // receives it through the same channel as shared links. An empty query means just "play music".
+    private fun linkFrom(intent: Intent?): String? = when (intent?.action) {
+        Intent.ACTION_VIEW -> intent.dataString
+        MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH ->
+            Uri.Builder().scheme("samgeet").authority("play")
+                .appendQueryParameter("q", intent.getStringExtra(SearchManager.QUERY).orEmpty())
+                .build().toString()
+        else -> null
+    }
 }

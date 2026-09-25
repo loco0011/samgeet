@@ -44,6 +44,15 @@ SharedLink? parseSharedLink(String raw) {
   return SharedSong(id, title.length > 120 ? title.substring(0, 120) : title);
 }
 
+/// Reads a voice "play `<query>`" request (`samgeet://play?q=...`, built by `MainActivity`).
+/// Gives the spoken query (empty for just "play music"), or null if [raw] isn't one.
+String? parseVoiceQuery(String raw) {
+  final u = Uri.tryParse(raw.trim());
+  if (u == null || u.scheme != 'samgeet' || u.host != 'play') return null;
+  final q = (u.queryParameters['q'] ?? '').trim();
+  return q.length > 200 ? q.substring(0, 200) : q;
+}
+
 /// Bridge to `MainActivity`, which receives the link when the app is opened from one.
 class DeepLinks {
   static const _channel = MethodChannel('app.samgeet.music/links');
