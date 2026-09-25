@@ -60,3 +60,6 @@ android/build/
 
 # Local release notes (APK checksums)
 docs/release-checksums.md
+
+# Claude Code notes for this machine only
+CLAUDE.local.md
