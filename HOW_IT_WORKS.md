@@ -9,12 +9,12 @@
 ## 1. What the app is
 
 Samgeet is a Flutter music player (Android is the main target; iOS, web, Windows, macOS and
-Linux folders exist). It has no backend of its own, no music files and no user accounts. All
-it does is:
+Linux folders exist). It hosts no music files. All it does is:
 
 1. Talk to a third-party music service's web API from the phone.
 2. Play the audio streams it gets back.
-3. Save your favourites, playlists, history and taste profile on the phone.
+3. Save your favourites, playlists, history and taste profile on the phone, and, if you sign
+   in, sync them through a small server of its own (`backend/`: accounts, share links, profiles).
 
 | Layer | Where | Job |
 |---|---|---|
@@ -23,6 +23,8 @@ it does is:
 | Player | `lib/player/player_controller.dart` | Queue, `just_audio` playback, background audio, sleep timer, auto-refill |
 | Recommendations | `lib/engine/*` | Mood inference, taste profile, ranking |
 | Local storage | `lib/data/library_store.dart` | `SharedPreferences` (favourites, playlists, history, profile) |
+| Account sync | `lib/data/sync_service.dart` | Email + password account, three-way merge with the server |
+| Sharing | `lib/data/share_service.dart` | Short share links (`/s/<code>`), playlist import |
 | UI | `lib/ui/*` | Screens and widgets |
 
 ---
@@ -87,11 +89,19 @@ Key points:
    server of your own. The mood is guessed from title, album and era keywords (see
    `lib/engine/mood.dart`).
 7. **Your data.** Profile, favourites, playlists, history and taste weights are saved as JSON in
-   `SharedPreferences` on the device. The app has no backend and does not upload them. (Note
-   that JioSaavn still sees every request you make: your IP, the songs you search and play,
-   and the spoofed User-Agent.)
-8. **"Sign in".** It is only a local profile with a name and preferences. There is no password
-   and no cloud sync. It is not a real account.
+   `SharedPreferences` on the device. Guests' data never leaves the phone. (Note that JioSaavn
+   still sees every request you make: your IP, the songs you search and play, and the spoofed
+   User-Agent.)
+8. **Sign in and sync.** Signing in takes an email and a password. The phone turns them into an
+   account key (PBKDF2, 150,000 rounds, salted with the email) and syncs the whole library with
+   `backend/api/backup.php` under that key; the server keeps only a hash of it, so the password
+   can't be reset. An existing account's library comes back to the phone; a new one starts from
+   the phone's library. Syncing is a three-way merge (lists merge item by item, deletions
+   included) and every save names the revision it built on, so two phones never overwrite each
+   other. Signing out only stops syncing on that phone.
+9. **Sharing.** A shared song or playlist becomes a short link (`https://api.sambitmaity.fun/s/<code>`,
+   `backend/api/link.php`) whose details are stored on the server. It opens the app directly
+   (Android App Links) or a landing page with a download button.
 
 ---
 
@@ -117,12 +127,15 @@ Key points:
 
 - **No offline mode.** Nothing is cached to disk, so there is no download-and-listen. This is
   also partly why it is a bit safer legally than a downloader (see below).
-- **No real accounts or sync.** Changing phone means losing your library. Guests are limited to
-  5 songs per playlist by design.
+- **Accounts are password-only.** There is no email verification and no password reset: a
+  forgotten password means a lost library, and anyone can check whether an email has an account
+  (that is how sign-in says "wrong password"). There is no in-app way yet to delete an account's
+  library from the server. Guests are limited to 5 songs per playlist by design.
 - **Security of the design.** The hard-coded DES key is not a secret. DES-ECB is weak
   encryption and was never meant to protect anything from you, only to stop casual scraping.
-- **Privacy is only partial.** Data stays on the device, but JioSaavn receives your requests
-  (IP address, search terms, play activity).
+- **Privacy is only partial.** JioSaavn receives your requests (IP address, search terms, play
+  activity). If you sign in, your library, history included, sits on Samgeet's server compressed
+  but not encrypted, so whoever runs the server could read it.
 - **Dependency pin.** `cached_network_image` is pinned to 3.4.1 because 4.x doesn't compile
   with the current Flutter version. Future upgrades will need attention.
 - **Platform support is uneven.** The README verifies Android behaviour (background audio,
@@ -225,7 +238,7 @@ If you want to keep the app and ship it safely, these are the real options:
 |---|---|
 | Where does the music come from? | JioSaavn's servers, through its unofficial web API. Nothing is hosted by the app. |
 | How does it play? | Fetch metadata → get an encrypted stream URL → decrypt it on-device with a hard-coded DES key → stream it with `just_audio`. |
-| Where is my data? | On your phone only (`SharedPreferences`). JioSaavn still sees your requests. |
+| Where is my data? | On your phone (`SharedPreferences`), plus your account on Samgeet's server if you sign in. JioSaavn still sees your requests. |
 | Biggest technical drawback? | Depends on an undocumented API that can change or block you at any time. |
 | Is the code legal? | Yes. It is MIT-licensed original work. |
 | Is the streaming legal? | Very likely **not authorised** (terms of use, licensing, possible circumvention of protection, ad-free access). |

@@ -123,9 +123,13 @@ class AboutScreen extends StatelessWidget {
         card(
           Icons.lock_rounded,
           'Your data',
-          'Your playlists, favourites, listening history and profile photo are stored on this phone only. '
-          'If you sign in, a copy of your profile (name, email, icon or emoji, and the languages, moods and singers you chose) '
-          'is also saved on Samgeet\'s server, plus device details if you agreed to share them. Signing out deletes that copy.',
+          'As a guest, your playlists, favourites and history stay on this phone only. '
+          'If you sign in with an email and password, your library (playlists, liked songs, history, followed artists, '
+          'settings and profile) is saved to your account on Samgeet\'s server, so it comes back on any phone you sign in on. '
+          'Your password never leaves the phone and can\'t be reset. Profile photos stay on the phone. '
+          'Device details are kept only if you agreed to share them. '
+          'Sharing a song or playlist stores its details (or the playlist\'s name and song list) on the server to make the short link. '
+          'Signing out stops syncing on this phone; your account keeps your library.',
         ),
         card(
           Icons.gavel_rounded,

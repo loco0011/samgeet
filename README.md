@@ -2,7 +2,7 @@
 
 **An open-source, ad-free music player for Android — created by [Sambit Maity](https://www.linkedin.com/in/sambitmaity/).**
 
-Streams up to 320 kbps, smart mood-matched autoplay, on-device taste learning, background playback with lock-screen controls.
+Streams up to 320 kbps, smart mood-matched autoplay, on-device taste learning, an equalizer, background playback with lock-screen controls, and a library that syncs across your phones.
 
 [![Download APK](https://img.shields.io/badge/Download-Samgeet.apk-7c4dff?style=for-the-badge&logo=android&logoColor=white)](https://github.com/loco0011/samgeet/releases/latest/download/Samgeet.apk)
 [![Latest release](https://img.shields.io/github/v/release/loco0011/samgeet?style=for-the-badge)](https://github.com/loco0011/samgeet/releases/latest)
@@ -17,7 +17,13 @@ Licence: MIT (see [LICENSE](LICENSE)) · © 2026 Sambit Maity
 Needs Android 7.0 or newer. Play Protect may warn about an unrecognised app because it is not from the Play Store; choose *Install anyway*. Each release page lists the SHA-256 of the APK so you can check the download.
 
 ## Sharing
-Sharing a song or playlist sends a link to a small page on `api.sambitmaity.fun` that shows the song or playlist and a **Download Samgeet** button. Friends who already have the app just tap the link: it opens Samgeet, which plays the song or asks before adding the playlist (Android App Links, with an **Open in Samgeet** button on the page as a fallback). Playlist messages can also be pasted into **Library → Import**. The page hosts no music and no audio, only what the link itself carries plus the cover art from the catalogue's CDN. Playlist contents travel in the link's `#…` part, which browsers never send to the server. See [`backend/`](backend/README.md).
+Sharing a song or playlist sends a short link like `https://api.sambitmaity.fun/s/k7qm2xa` to a small page that shows the song or playlist (with its cover) and a **Download Samgeet** button. Friends who already have the app just tap the link: it opens Samgeet, which plays the song or asks before adding the playlist (Android App Links, with an **Open in Samgeet** button on the page as a fallback). Shared messages can also be pasted into **Library → Import**. The server stores only what the link stands for (the song's details, or a playlist's name and song ids); when the phone is offline the app falls back to a long link that carries everything itself. The page hosts no music and no audio. See [`backend/`](backend/README.md).
+
+## Voice
+"Play *song* on Samgeet" works from Bixby and Google Assistant: Samgeet registers as a music app, and the spoken query plays the best match. "Play music on Samgeet" resumes the queue.
+
+## Equalizer
+The player's **Sound** button opens an equalizer (a curve you drag, presets such as Bass boost, Vocal and Late night, and a loudness boost). It uses Android's built-in `Equalizer` and `LoudnessEnhancer` effects, so it works on Android only. Settings are saved and sync with your account.
 
 ## Build from source
 - Build APK: `flutter build apk --release` → `build/app/outputs/flutter-apk/app-release.apk`
@@ -26,9 +32,9 @@ Sharing a song or playlist sends a link to a small page on `api.sambitmaity.fun`
 - Release signing: put your keystore details in `android/key.properties` (git-ignored). Without it the build falls back to the debug key, which is fine for testing but not for publishing. How to back the key up, restore it and publish a release: [`docs/Samgeet-Signing-Key-Backup-Guide.pdf`](docs/Samgeet-Signing-Key-Backup-Guide.pdf).
 
 ## Layout
-- `lib/data` — API client, models, library store (favourites/playlists/history), catalog of categories
+- `lib/data` — API client, models, library store (favourites/playlists/history), account sync, share links, catalog of categories
 - `lib/engine` — `taste_profile.dart` (learns from likes/skips/completions), `recommender.dart` (pure ranking), `recommendation_service.dart` (candidate gathering)
-- `lib/player` — queue, autoplay refills, sleep timer, error recovery
+- `lib/player` — queue, autoplay refills, sleep timer, error recovery, equalizer
 - `lib/ui` — screens and widgets
 
 ## Gotchas
@@ -47,8 +53,12 @@ A dark "aurora" design: animated backdrop that follows the album, frosted-glass 
 ## Mood theme
 The app recolours itself to the song's mood (Romantic, Melancholy, Party, Chill, Devotional, Nostalgic, Focus). The mood is *inferred* from title/album keywords, the category you started from and the era — there is no audio analysis. See `lib/engine/mood.dart`.
 
-## Profile and limits
-"Sign in" creates a profile stored on this phone (name, required email, favourite languages/moods/singers). Optionally — off by default — it also keeps the device model and an approximate (city-level) location; the public IP will be recorded by the server once accounts exist. Guests can keep 5 songs per playlist and can't share playlists; signing in lifts both limits and seeds the recommendations. A copy of the profile is saved on the author's server (a small PHP + MySQL API, see [`backend/`](backend/README.md)) and deleted on sign-out; playlists, favourites, history and the uploaded photo stay on the phone. There is no password or restore-by-email yet.
+## Accounts and sync
+Signing in takes an email and a password. If that account exists, its library comes back to the phone (playlists, liked songs, history, followed artists, recent searches, taste, settings, equalizer and profile); if not, a new account starts from what's on the phone. A wrong password for a known email is refused rather than creating a second, empty account. After that, every phone signed in to the account stays in sync: changes are merged (deletions included) when the app opens, comes back to the front, or a few seconds after you change something. See `lib/data/sync_service.dart`.
+
+The password never leaves the phone: PBKDF2 (150,000 rounds, salted with the email) turns it into the account key, and the server (a small PHP + MySQL API, see [`backend/`](backend/README.md)) stores only a hash of it, so a forgotten password can't be reset. The library is stored compressed, not encrypted. Profile photos stay on the phone. Signing out only stops syncing on that phone; the account keeps its library. There is no in-app way yet to delete an account's library from the server.
+
+The profile also holds a name and favourite languages/moods/singers, which seed the recommendations. Optionally (off by default) it keeps the device model and an approximate, city-level location. Guests can keep 5 songs per playlist and can't share playlists; signing in lifts both limits.
 
 ## Logo
 `assets/mark-chrome.webp` is the master (transparent background). The Android launcher, adaptive/monochrome and splash images under `android/app/src/main/res/` were generated from it.

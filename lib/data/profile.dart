@@ -2,9 +2,9 @@ import 'device_snapshot.dart';
 
 /// Who is listening, and what they told us they like.
 ///
-/// The profile lives on this device. There is no password or cloud sync yet (email is
-/// the future account key, so it is required and stored lower-case);
-/// it unlocks sharing and long playlists and seeds the recommendations.
+/// The profile lives on this device and syncs with the account (see `SyncService`; the email,
+/// stored lower-case, is part of the account key). It unlocks sharing and long playlists and
+/// seeds the recommendations.
 class Profile {
   final String name;
   final String email;

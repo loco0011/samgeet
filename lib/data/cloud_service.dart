@@ -8,7 +8,7 @@ import 'profile.dart';
 
 /// Keeps a copy of the listener's profile on Samgeet's own server (see `backend/`).
 ///
-/// Only the profile goes up; playlists, favourites, history and the uploaded photo stay on the phone.
+/// One row per install, profile only (the library itself syncs through `SyncService`).
 /// Each install makes a random secret on first use and sends it with every request, so only that
 /// install can change or delete its own row. Failures are silent: the app works offline, and the
 /// change is retried the next time the app starts.
