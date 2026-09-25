@@ -18,6 +18,7 @@ import 'theme.dart';
 import 'widgets/common.dart';
 import 'widgets/glass.dart';
 import 'widgets/mini_player.dart';
+import 'widgets/sign_in_nudge.dart';
 import 'widgets/update_dialog.dart';
 
 /// Bottom navigation (phones) or a side rail (tablets / landscape), with one
@@ -79,9 +80,12 @@ class _AppShellState extends State<AppShell> {
     _deepLinks.initial().then((l) {
       if (l != null) _openLink(l);
     });
-    // A newer release on GitHub? Ask once the home screen has settled.
-    Future.delayed(const Duration(seconds: 4), () {
-      if (mounted) checkForUpdate(context);
+    // Once the home screen has settled: a newer release on GitHub? If not, and this version hasn't
+    // asked yet, invite a guest to sign in (or an old sign-in to add a password). One popup at a time.
+    Future.delayed(const Duration(seconds: 4), () async {
+      if (!mounted) return;
+      final updating = await checkForUpdate(context);
+      if (!updating && mounted) await maybeShowSignInNudge(context);
     });
   }
 

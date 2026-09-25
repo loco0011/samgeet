@@ -35,10 +35,13 @@ class SyncService extends ChangeNotifier {
   static const _pendingPref = 'syncPending';
   static const _elsewherePref = 'syncLoggedOutElsewhere';
 
+  /// The app version the "sign in / add a password" popup was last shown for (this phone only).
+  static const nudgePref = 'signInNudgeShown';
+
   /// Bookkeeping that belongs to this phone, never synced.
   static const _local = {
     _keyPref, _emailPref, _basePref, _revPref, _lastPref, _pendingPref, _elsewherePref, //
-    'installKey', 'cloudSavePending', 'cloudDeletePending', 'themeMood',
+    'installKey', 'cloudSavePending', 'cloudDeletePending', 'themeMood', nudgePref,
   };
 
   /// Lists of JSON objects that merge item by item, newest first, with an optional cap.

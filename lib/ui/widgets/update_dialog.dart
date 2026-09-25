@@ -9,12 +9,12 @@ import '../theme.dart';
 import '../nav.dart';
 
 /// Looks for a newer release and, if there is one, shows the update popup.
-/// [manual] (the About screen's button) also reports "you're up to date".
-Future<void> checkForUpdate(BuildContext context, {bool manual = false}) async {
+/// [manual] (the About screen's button) also reports "you're up to date". Returns whether the popup showed.
+Future<bool> checkForUpdate(BuildContext context, {bool manual = false}) async {
   // Updates are APK downloads from GitHub, which only Android can install.
   if (!Platform.isAndroid) {
     if (manual) toast(context, 'You have version $kVersionName');
-    return;
+    return false;
   }
   final service = UpdateService();
   AppUpdate? update;
@@ -22,14 +22,15 @@ Future<void> checkForUpdate(BuildContext context, {bool manual = false}) async {
     update = await service.check(manual: manual);
   } catch (_) {
     if (manual && context.mounted) toast(context, 'Couldn\'t check for updates. Check your connection.');
-    return;
+    return false;
   }
-  if (!context.mounted) return;
+  if (!context.mounted) return false;
   if (update == null) {
     if (manual) toast(context, 'You have the latest version ($kVersionName)');
-    return;
+    return false;
   }
   await showUpdateDialog(context, update, service);
+  return true;
 }
 
 Future<void> showUpdateDialog(BuildContext context, AppUpdate u, UpdateService service) {
