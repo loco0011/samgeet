@@ -54,6 +54,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="api.sambitmaity.fun" android:pathPrefix="/share.php" />
+                <data android:scheme="https" android:host="api.sambitmaity.fun" android:pathPrefix="/s/" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

@@ -2,10 +2,10 @@
 // Samgeet share page: what a friend sees when they open a shared song or playlist link.
 //   share.php?t=song&id=<song id>&s=<title>&a=<artist>&al=<album>&i=<cover url>
 //   share.php?t=playlist&n=<name>&c=<song count>#p=<playlist code>
-// It shows only text the link itself carries, plus the cover art hotlinked from the catalogue's CDN.
-// It has no database, stores nothing, plays no audio and offers no song files: it is a link
-// preview with a "get the app" button. (The #p= playlist code stays in the browser and is never
-// sent to this server.)
+//   share.php?c=<short code>   (what /s/<code> rewrites to; the details come from link.php's table)
+// It shows only the song/playlist details the link stands for, plus the cover art hotlinked from
+// the catalogue's CDN. It stores nothing, plays no audio and offers no song files: it is a link
+// preview with a "get the app" button. (A long link's #p= playlist code stays in the browser.)
 
 ini_set('display_errors', '0');
 
@@ -33,8 +33,39 @@ function cover($url)
     $p = parse_url($url);
     if (!$p || ($p['scheme'] ?? '') !== 'https' || isset($p['user']) || isset($p['port'])) return '';
     $host = strtolower($p['host'] ?? '');
-    if ($host !== 'saavncdn.com' && substr($host, -12) !== '.saavncdn.com') return '';
+    if ($host !== 'saavncdn.com' && substr($host, -13) !== '.saavncdn.com') return '';
     return $url;
+}
+
+// A short link (/s/<code>, see link.php): read what the code stands for from the database.
+$short = '';
+$count = null;
+$code = $_GET['c'] ?? '';
+if (is_string($code) && preg_match('/^[23456789abcdefghjkmnpqrstuvwxyz]{7}$/', $code)) {
+    $cfgFile = null;
+    foreach ([dirname(__DIR__, 3) . '/samgeet_config.php', __DIR__ . '/config.php'] as $candidate) {
+        if (is_file($candidate)) { $cfgFile = $candidate; break; }
+    }
+    try {
+        if ($cfgFile === null) throw new RuntimeException('not configured');
+        $cfg = require $cfgFile;
+        $pdo = new PDO(
+            "mysql:host={$cfg['host']};dbname={$cfg['name']};charset=utf8mb4",
+            $cfg['user'],
+            $cfg['pass'],
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES => false, PDO::ATTR_TIMEOUT => 5]
+        );
+        $q = $pdo->prepare('SELECT payload FROM short_links WHERE code = ?');
+        $q->execute([$code]);
+        $p = json_decode((string)$q->fetchColumn(), true);
+        if (is_array($p)) {
+            $short = $code;
+            $_GET = ['t' => $p['t'] ?? '', 'n' => $p['n'] ?? '', 's' => $p['s'] ?? '', 'a' => $p['a'] ?? '', 'al' => $p['al'] ?? '', 'i' => $p['i'] ?? ''];
+            $count = is_array($p['ids'] ?? null) ? count($p['ids']) : null;
+        }
+    } catch (Throwable $e) {
+        error_log('samgeet share: ' . $e->getMessage());
+    }
 }
 
 $type = ($_GET['t'] ?? '') === 'playlist' ? 'playlist' : 'song';
@@ -42,7 +73,7 @@ $image = '';
 
 if ($type === 'playlist') {
     $title = param('n', 80) ?: 'A playlist';
-    $count = max(0, min(500, (int)($_GET['c'] ?? 0)));
+    $count = max(0, min(500, $count ?? (int)($_GET['c'] ?? 0)));
     $sub = $count > 0 ? "Playlist · $count songs" : 'Playlist';
     $ogTitle = "$title — playlist on Samgeet";
     $ogDesc = ($count > 0 ? "$count songs. " : '') . 'Get Samgeet, the ad-free music player, and import this playlist.';
@@ -146,13 +177,14 @@ header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; img
 </main>
 <script nonce="<?= e($nonce) ?>">
   // On Android, hand this same link to the app (needs Samgeet installed; otherwise nothing happens).
+  var short = <?= json_encode($short) ?>;
   var o = document.getElementById('open');
   if (o && /Android/i.test(navigator.userAgent)) {
-    o.href = 'samgeet://share' + location.search + location.hash;
+    o.href = short ? 'samgeet://share?c=' + short : 'samgeet://share' + location.search + location.hash;
     o.style.display = 'block';
   }
   var b = document.getElementById('import');
-  if (b && location.hash.indexOf('#p=') === 0) {
+  if (b && (short || location.hash.indexOf('#p=') === 0)) {
     b.style.display = 'block';
     b.addEventListener('click', function () {
       var done = function () { b.textContent = 'Copied ✓'; };

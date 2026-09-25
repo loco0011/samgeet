@@ -4,3 +4,7 @@ Options -Indexes
 <Files "config.php">
   Require all denied
 </Files>
+
+# Short share links: /s/<code> shows the share page for that code.
+RewriteEngine On
+RewriteRule ^s/([23456789abcdefghjkmnpqrstuvwxyz]{7})/?$ share.php?c=$1 [L,QSA]

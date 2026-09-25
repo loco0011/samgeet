@@ -88,8 +88,13 @@ class _AppShellState extends State<AppShell> {
   Future<void> _openLink(String raw) async {
     final spoken = parseVoiceQuery(raw);
     if (spoken != null) return _playSpoken(spoken);
-    final link = parseSharedLink(raw);
-    if (link == null || !mounted) return;
+    final code = shortLinkCode(raw);
+    final link = code != null ? await resolveShortLink(code) : parseSharedLink(raw);
+    if (!mounted) return;
+    if (link == null) {
+      if (code != null) toast(context, 'Could not open that link. Check your connection.');
+      return;
+    }
     final api = context.read<SaavnApi>();
     final player = context.read<PlayerController>();
     switch (link) {

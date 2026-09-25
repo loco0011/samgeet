@@ -15,7 +15,8 @@ on the server, which is git-ignored.
 2. **Point a subdomain at the hosting.** The main site is on Netlify (no PHP), so the API lives on
    its own subdomain, `api.sambitmaity.fun`: add an **A** record `api` -> the Hostinger server IP in
    the domain's DNS, then add the subdomain in hPanel -> Domains -> Subdomains and enable its SSL.
-   Upload `api/profile.php`, `api/backup.php` and `api/.htaccess` into that subdomain's folder.
+   Upload `api/profile.php`, `api/backup.php`, `api/link.php`, `api/share.php` and `api/.htaccess` into that
+   subdomain's folder.
 3. **Add the credentials.** Create `config.php` from `api/config.sample.php` and fill in your real
    database name, user and password (the host stays `localhost`). Best: save it as
    `samgeet_config.php` **outside** `public_html`, in the site's own folder (the one that contains
@@ -47,14 +48,20 @@ The app's API address is `CloudService.baseUrl` in `lib/data/cloud_service.dart`
 ## Share page (`api/share.php`)
 The page a friend lands on when they open a shared song or playlist link: title, artist and cover art
 (or the playlist name and song count) plus a **Download Samgeet** button that points at the latest
-GitHub release. Upload it next to `profile.php`; it needs no database or config.
+GitHub release. Upload it next to `profile.php`.
 
-- `https://api.sambitmaity.fun/share.php?t=song&s=Title&a=Artist&al=Album&i=<cover>`
-- `https://api.sambitmaity.fun/share.php?t=playlist&n=Name&c=12#p=<playlist code>`
+- `https://api.sambitmaity.fun/s/k7qm2xa`: a **short link** (what the app shares). `.htaccess` rewrites
+  it to `share.php?c=k7qm2xa`, which reads the details from the `short_links` table.
+- `https://api.sambitmaity.fun/share.php?t=song&s=Title&a=Artist&al=Album&i=<cover>` and
+  `...share.php?t=playlist&n=Name&c=12#p=<playlist code>`: the long links, used when the phone is
+  offline (and by older app versions). The `#p=` code never reaches the server.
 
-It hosts no music or audio. It shows only text carried in the link, escapes all of it, and embeds
-cover art only from `*.saavncdn.com`. The `#p=` code never reaches the server. If you rename the
-APK or move the repo, change `APK_URL` at the top of the file.
+`api/link.php` makes and looks up short links: `POST` a song (`id`, title, artist, album, cover) or a
+playlist (name + song ids) and get a 7-character code back; `GET link.php?c=<code>` returns it. The same
+song or playlist always gets the same code. Only what the long link used to carry is stored.
+
+It hosts no music or audio. It escapes everything it shows and embeds cover art only from
+`*.saavncdn.com`. If you rename the APK or move the repo, change `APK_URL` at the top of the file.
 
 ## Making links open the app (`api/.well-known/assetlinks.json`)
 Upload the whole `.well-known` folder next to `share.php` so that

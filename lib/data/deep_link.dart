@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
 import 'cloud_service.dart';
 import 'share_service.dart';
@@ -42,6 +44,49 @@ SharedLink? parseSharedLink(String raw) {
   if (!_idPattern.hasMatch(id)) return null;
   final title = (q['s'] ?? '').trim();
   return SharedSong(id, title.length > 120 ? title.substring(0, 120) : title);
+}
+
+/// The code of a short share link in [text]: `https://api.sambitmaity.fun/s/<code>` (on its own or
+/// inside a pasted message) or the page's `samgeet://share?c=<code>`. Null if there isn't one.
+String? shortLinkCode(String text) {
+  final host = RegExp.escape(Uri.parse(CloudService.baseUrl).host);
+  final chars = ShareService.shortCodeChars;
+  final m = RegExp('https://$host/s/([$chars]{7})(?![A-Za-z0-9])').firstMatch(text);
+  if (m != null) return m.group(1);
+  final u = Uri.tryParse(text.trim());
+  if (u != null && u.scheme == 'samgeet' && u.host == 'share') {
+    final c = u.queryParameters['c'] ?? '';
+    if (ShareService.shortCodePattern.hasMatch(c)) return c;
+  }
+  return null;
+}
+
+/// Asks the server what the short link [code] stands for. Null if it's unknown or unreachable.
+/// The answer is treated like any other link from a stranger: checked field by field.
+Future<SharedLink?> resolveShortLink(String code, {http.Client? client}) async {
+  if (!ShareService.shortCodePattern.hasMatch(code)) return null;
+  final c = client ?? http.Client();
+  try {
+    final r = await c.get(Uri.parse('${CloudService.baseUrl}/link.php?c=$code')).timeout(const Duration(seconds: 8));
+    if (r.statusCode != 200) return null;
+    final j = jsonDecode(r.body);
+    if (j is! Map) return null;
+    if (j['t'] == 'playlist') {
+      final ids = (j['ids'] is List ? j['ids'] as List : const []).map((e) => '$e').where(_idPattern.hasMatch).take(ShareService.maxSongs).toList();
+      if (ids.isEmpty) return null;
+      var name = '${j['n'] ?? ''}'.trim();
+      if (name.isEmpty) name = 'Shared playlist';
+      return SharedPlaylist(name.length > 80 ? name.substring(0, 80) : name, ids);
+    }
+    final id = '${j['id'] ?? ''}';
+    if (!_idPattern.hasMatch(id)) return null;
+    final title = '${j['s'] ?? ''}'.trim();
+    return SharedSong(id, title.length > 120 ? title.substring(0, 120) : title);
+  } catch (_) {
+    return null;
+  } finally {
+    if (client == null) c.close();
+  }
 }
 
 /// Reads a voice "play `<query>`" request (`samgeet://play?q=...`, built by `MainActivity`).

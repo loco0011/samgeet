@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 
 import 'cloud_service.dart';
@@ -25,10 +26,11 @@ class _CappedSink implements Sink<List<int>> {
 
 /// Sharing songs and playlists.
 ///
-/// Songs and playlists are shared as a link to the landing page on Samgeet's server
-/// (`backend/api/share.php`): song/playlist info plus a "download the app" button. A playlist link
-/// also carries a compact code in its `#p=` fragment (the fragment never reaches the server), so
-/// anyone with Samgeet can paste the message into "Import playlist" and get the same list.
+/// Songs and playlists are shared as a short link, `https://api.sambitmaity.fun/s/<code>`, that the
+/// server (`backend/api/link.php`) maps to the song or playlist; it opens the landing page
+/// (`backend/api/share.php`: details plus a "download the app" button), or the app itself. Offline,
+/// the old long link is used instead: the song's details in the query, and for a playlist a compact
+/// code in its `#p=` fragment, so "Import playlist" still works from a pasted message.
 class ShareService {
   static const _prefix = 'samgeet://p/';
   // Codes shared before the app was renamed still import.
@@ -49,9 +51,48 @@ class ShareService {
       '${Uri.parse(_pageUrl).replace(queryParameters: {'t': 'playlist', 'n': name, 'c': '${tracks.length}'})}'
       '#p=${encodePlaylist(name, tracks, withPrefix: false)}';
 
-  static Future<void> shareTrack(Track t) {
-    return SharePlus.instance.share(ShareParams(
-      text: '🎵 ${t.title} — ${t.artistLine}\n\nListen on Samgeet, the ad-free music player:\n${songLink(t)}',
+  // ---------- short links: https://api.sambitmaity.fun/s/<code> (backend/api/link.php) ----------
+  static const shortCodeChars = '23456789abcdefghjkmnpqrstuvwxyz';
+  static final shortCodePattern = RegExp('^[$shortCodeChars]{7}\$');
+
+  /// Asks the server for a short link standing for [payload]; null if it can't be reached.
+  static Future<String?> _shortLink(Map<String, Object> payload, http.Client? client) async {
+    final c = client ?? http.Client();
+    try {
+      final r = await c
+          .post(Uri.parse('${CloudService.baseUrl}/link.php'), headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload))
+          .timeout(const Duration(seconds: 6));
+      if (r.statusCode != 200) return null;
+      final code = (jsonDecode(r.body) as Map)['code'];
+      return code is String && shortCodePattern.hasMatch(code) ? '${CloudService.baseUrl}/s/$code' : null;
+    } catch (_) {
+      return null;
+    } finally {
+      if (client == null) c.close();
+    }
+  }
+
+  /// A short link to [t], or the long one if the server can't be reached.
+  static Future<String> shortSongLink(Track t, {http.Client? client}) async =>
+      await _shortLink({
+        't': 'song',
+        'id': t.id,
+        's': t.title,
+        if (t.artists.isNotEmpty) 'a': t.artistLine,
+        if (t.album.isNotEmpty) 'al': t.album,
+        if (t.image.isNotEmpty) 'i': t.art(500),
+      }, client) ??
+      songLink(t);
+
+  /// A short link to a playlist, or the long one (which carries the songs itself) when offline.
+  static Future<String> shortPlaylistLink(String name, List<Track> tracks, {http.Client? client}) async =>
+      await _shortLink({'t': 'playlist', 'n': name, 'ids': tracks.map((t) => t.id).take(maxSongs).toList()}, client) ??
+      playlistLink(name, tracks);
+
+  static Future<void> shareTrack(Track t) async {
+    final link = await shortSongLink(t);
+    await SharePlus.instance.share(ShareParams(
+      text: '🎵 ${t.title} · ${t.primaryArtist}\nListen on Samgeet 👉 $link',
       subject: t.title,
     ));
   }
@@ -98,15 +139,14 @@ class ShareService {
     return out.takeBytes();
   }
 
-  static Future<void> sharePlaylist(String name, List<Track> tracks) {
-    final shown = tracks.take(15).toList();
-    final lines = [
-      for (var i = 0; i < shown.length; i++) '${i + 1}. ${shown[i].title} — ${shown[i].primaryArtist}',
-      if (tracks.length > shown.length) '…and ${tracks.length - shown.length} more',
-    ];
-    return SharePlus.instance.share(ShareParams(
-      text: '🎧 "$name" on Samgeet (${tracks.length} songs)\n\n${lines.join('\n')}\n\n'
-          'Get Samgeet and import it (Library → Import → paste this message):\n${playlistLink(name, tracks)}',
+  static Future<void> sharePlaylist(String name, List<Track> tracks) async {
+    final link = await shortPlaylistLink(name, tracks);
+    final firstFew = tracks.take(3).map((t) => t.title).join(', ');
+    final more = tracks.length > 3 ? ' and ${tracks.length - 3} more' : '';
+    await SharePlus.instance.share(ShareParams(
+      text: '🎧 $name · ${tracks.length} ${tracks.length == 1 ? 'song' : 'songs'}\n'
+          '${firstFew.isEmpty ? '' : '$firstFew$more\n'}'
+          'Open in Samgeet 👉 $link',
       subject: name,
     ));
   }

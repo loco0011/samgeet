@@ -33,6 +33,16 @@ CREATE TABLE IF NOT EXISTS backups (
 --   ALTER TABLE backups ADD COLUMN rev INT UNSIGNED NOT NULL DEFAULT 1 AFTER data,
 --     ADD COLUMN email_hash CHAR(64) NULL AFTER rev, ADD KEY idx_email_hash (email_hash);
 
+-- Short share links (https://api.sambitmaity.fun/s/<code>): what a long share.php link used to carry.
+CREATE TABLE IF NOT EXISTS short_links (
+  code         CHAR(7)   NOT NULL,             -- 7 characters from 23456789abcdefghjkmnpqrstuvwxyz
+  payload_hash CHAR(64)  NOT NULL,             -- sha256 of payload, so the same song/playlist reuses its code
+  payload      TEXT      NOT NULL,             -- JSON: {"t":"song",id,s,a,al,i} or {"t":"playlist",n,ids}
+  created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (code),
+  UNIQUE KEY uq_payload (payload_hash)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Per-IP request counter used to rate-limit the API (rows are purged automatically).
 CREATE TABLE IF NOT EXISTS api_hits (
   ip_hash CHAR(64)     NOT NULL,        -- sha256 of the caller's IP, never the IP itself

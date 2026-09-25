@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/deep_link.dart';
 import '../../data/library_store.dart';
 import '../../data/saavn_api.dart';
 import '../../data/share_service.dart';
@@ -356,7 +357,13 @@ Future<void> showImportDialog(BuildContext context) async {
   );
   if (text == null || !context.mounted) return;
 
-  final decoded = ShareService.decodePlaylist(text);
+  var decoded = ShareService.decodePlaylist(text);
+  final code = decoded == null ? shortLinkCode(text) : null;
+  if (code != null) {
+    final link = await resolveShortLink(code);
+    if (!context.mounted) return;
+    if (link is SharedPlaylist) decoded = (name: link.name, ids: link.ids);
+  }
   if (decoded == null) {
     toast(context, 'That doesn\'t look like a Samgeet playlist');
     return;
