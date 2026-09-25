@@ -10,6 +10,7 @@ import '../data/saavn_api.dart';
 import '../data/track.dart';
 import '../engine/recommendation_service.dart';
 import '../engine/taste_profile.dart';
+import 'audio_fx.dart';
 
 /// Owns the queue and the audio player.
 ///
@@ -17,7 +18,9 @@ import '../engine/taste_profile.dart';
 /// and when the queue runs low, "smart radio" tops it up with songs that match
 /// the mood of what's playing.
 class PlayerController extends ChangeNotifier {
-  final AudioPlayer player = AudioPlayer();
+  /// Equalizer and loudness boost, wired into [player]'s output.
+  final AudioFx fx = AudioFx();
+  late final AudioPlayer player = AudioPlayer(audioPipeline: fx.pipeline);
   final SaavnApi api;
   final LibraryStore library;
   final RecommendationService reco;
@@ -465,6 +468,7 @@ class PlayerController extends ChangeNotifier {
     _stallTimer?.cancel();
     _messages.close();
     player.dispose();
+    fx.dispose();
     super.dispose();
   }
 }

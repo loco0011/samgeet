@@ -79,7 +79,7 @@ Key points:
 4. **Playback.** `just_audio` streams the URL. Nothing is downloaded or saved to disk. The
    track is buffered as you play it, and only the song's metadata and encrypted link are stored
    locally.
-5. **Lyrics.** Fetched from JioSaavn's `lyrics.getLyrics` and shown in the player.
+5. **Equalizer.** The player runs through Android's built-in `Equalizer` and `LoudnessEnhancer` effects (`lib/player/audio_fx.dart`). Presets, band gains and the boost are saved on the device.
 6. **"Smart radio" / autoplay.** When the queue runs low, `RecommendationService` asks
    JioSaavn's radio endpoint for similar songs and also runs extra searches (same artist, your
    favourite artists, the category you started from). `Recommender` then ranks those candidates
@@ -164,7 +164,7 @@ the author appears to be there. Similar ideas apply in most places.
 | **Decrypting the stream URL** | Decrypting a protected link with a key extracted from someone else's client can be treated as **circumventing a technical protection measure**. That is specifically restricted in many places, e.g. DMCA §1201 in the US and Section 65A of the Copyright Act, 1957 in India. It is a separate potential violation from copyright infringement itself. Whether a weak DES scheme counts as an "effective" measure is arguable, but you would be arguing it in court. |
 | **Spoofed User-Agent** | The app claims to be a Chrome browser on a Pixel 7. That is a deliberate disguise and does not help if the service ever claims unauthorised access. |
 | **Possibly getting around paywalls** | If some qualities (for example 320 kbps) are meant for paying subscribers, serving them to anyone who asks bypasses that. I have not confirmed how JioSaavn gates 320 kbps. Test it before making claims either way. |
-| **Lyrics** | Lyrics are separately copyrighted (by writers and publishers). Showing them without a licence is its own exposure. |
+| **Lyrics** | Lyrics are separately copyrighted (by writers and publishers). The player no longer shows them, but `SaavnApi.lyrics` can still fetch them. |
 | **Artwork and metadata** | Album art is loaded from JioSaavn's CDN and is also copyrighted. The app hotlinks it. |
 | **Public distribution (APK in `dist/`, GitHub, WhatsApp, etc.)** | This is the big step up in risk. Personal use is one thing. Handing an app whose purpose is free, ad-free access to a licensed catalogue to other people can be treated as **facilitating or inducing infringement**, and it is exactly what rights holders and platforms act against. Under the Indian Copyright Act (Sections 51, 63) and similar laws elsewhere, commercial or large-scale infringement can bring criminal penalties, not only civil claims. |
 

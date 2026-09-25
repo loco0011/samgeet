@@ -326,7 +326,10 @@ class _ActionRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
         _Action(icon: Icons.bedtime_outlined, label: 'Sleep', active: sleepOn, onTap: () => showSleepSheet(context)),
-        _Action(icon: Icons.lyrics_outlined, label: 'Lyrics', onTap: () => showLyricsSheet(context, track)),
+        ListenableBuilder(
+          listenable: player.fx,
+          builder: (context, _) => _Action(icon: Icons.equalizer_rounded, label: 'Sound', active: player.fx.enabled, onTap: () => showEqualizerSheet(context)),
+        ),
         _Action(icon: Icons.playlist_add_rounded, label: 'Playlist', onTap: () => showPlaylistPicker(context, [track])),
         _Action(icon: Icons.ios_share_rounded, label: 'Share', onTap: () => ShareService.shareTrack(track)),
         _Action(icon: Icons.queue_music_rounded, label: 'Queue', onTap: () => showQueueSheet(context)),
