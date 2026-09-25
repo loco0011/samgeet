@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -9,12 +10,14 @@ import '../../data/catalog.dart';
 import '../../data/device_snapshot.dart';
 import '../../data/library_store.dart';
 import '../../data/profile.dart';
+import '../../data/sync_service.dart';
 import '../nav.dart';
 import '../mood_theme.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/glass.dart';
 import '../widgets/profile_avatar.dart';
+import '../widgets/account_widgets.dart';
 
 /// Palette colours can be deep; lift them so icons stay readable on the dark page.
 Color _lift(Color c) => Color.lerp(c, Colors.white, 0.55)!;
@@ -49,7 +52,10 @@ class _SignInScreenState extends State<SignInScreen> {
   final Set<String> _languages = {};
   final Set<String> _moods = {};
   final Set<String> _artists = {};
+  final _pass = TextEditingController();
   String? _emailError;
+  String? _nameError;
+  String? _passError;
   String _avatar = ''; // see Profile.avatar
   String? _newPhoto; // a photo copied in during this visit; removed again unless saved
   bool _saved = false;
@@ -75,6 +81,7 @@ class _SignInScreenState extends State<SignInScreen> {
   void dispose() {
     _name.dispose();
     _email.dispose();
+    _pass.dispose();
     if (!_saved) _deleteFile(_newPhoto);
     super.dispose();
   }
@@ -98,7 +105,9 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  bool get _valid => _name.text.trim().isNotEmpty && _email.text.trim().isNotEmpty;
+  // New here: email + password (the name is asked for if it's a new account).
+  // Editing: name + email; the password is only there while this phone isn't syncing yet.
+  bool get _valid => _email.text.trim().isNotEmpty && (_editing ? _name.text.trim().isNotEmpty : _pass.text.isNotEmpty);
 
   void _toggle(Set<String> set, String v) => setState(() => set.contains(v) ? set.remove(v) : set.add(v));
 
@@ -111,8 +120,52 @@ class _SignInScreenState extends State<SignInScreen> {
       return;
     }
     final lib = context.read<LibraryStore>();
+    final sync = context.read<SyncService>();
     final existing = lib.profile;
     final wasEditing = existing != null;
+
+    // With a password: sign in to the account if there is one (the library comes back), else make one.
+    AccountCheck? account;
+    if (!sync.loggedIn && (_pass.text.isNotEmpty || !wasEditing)) {
+      if (_pass.text.length < SyncService.minPasswordLength) {
+        setState(() => _passError = 'At least ${SyncService.minPasswordLength} characters');
+        return;
+      }
+      setState(() => _saving = true);
+      account = await sync.check(email, _pass.text);
+      if (!mounted) return;
+      final problem = switch (account.state) {
+        AccountState.wrongPassword => 'Wrong password for this email',
+        AccountState.offline => 'No internet. Connect to sign in.',
+        AccountState.slowDown => 'Too many tries. Wait 10 minutes and try again.',
+        AccountState.broken => 'Something went wrong. Try again in a bit.',
+        _ => null,
+      };
+      if (problem != null) {
+        setState(() {
+          _saving = false;
+          _passError = problem;
+        });
+        return;
+      }
+      if (account.state == AccountState.existing && !wasEditing) {
+        await sync.join(account); // brings the library, profile included
+        if (!mounted) return;
+        if (lib.signedIn) {
+          Navigator.of(context).pop(true);
+          toast(context, 'Welcome back, ${lib.profile!.name}!');
+          return;
+        }
+      }
+      if (_name.text.trim().isEmpty) {
+        setState(() {
+          _saving = false;
+          _nameError = 'New here? Add your name to create your account.';
+        });
+        return;
+      }
+    }
+
     // Only look at the device (and ask for the location permission) if they opted in.
     // Turning it off drops whatever was stored.
     DeviceSnapshot? device;
@@ -138,8 +191,13 @@ class _SignInScreenState extends State<SignInScreen> {
     final oldPhoto = existing?.photoPath;
     if (oldPhoto != null && oldPhoto != profile.photoPath) _deleteFile(oldPhoto);
     if (_newPhoto != null && _newPhoto != profile.photoPath) _deleteFile(_newPhoto);
+    if (account != null) {
+      await lib.flush(); // so the new account starts with this profile
+      unawaited(sync.join(account));
+    }
+    if (!mounted) return;
     Navigator.of(context).pop(true);
-    toast(context, wasEditing ? 'Profile saved' : 'Welcome to Samgeet, ${profile.name}!');
+    toast(context, wasEditing ? (account != null ? 'Profile saved. Your library is backed up now.' : 'Profile saved') : 'Welcome to Samgeet, ${profile.name}!');
   }
 
   @override
@@ -212,7 +270,46 @@ class _SignInScreenState extends State<SignInScreen> {
                   _Perk(Icons.library_music_rounded, 'Playlists with unlimited songs (guests: ${LibraryStore.guestPlaylistLimit})'),
                   SizedBox(height: 12),
                   _Perk(Icons.auto_awesome_rounded, 'Suggestions tuned to you from day one'),
+                  SizedBox(height: 12),
+                  _Perk(Icons.cloud_done_rounded, 'The same library on every phone you sign in on'),
                 ]),
+              ),
+              const SizedBox(height: 24),
+              TextField(
+                controller: _email,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                autocorrect: false,
+                onChanged: (_) => setState(() => _emailError = null),
+                decoration: InputDecoration(
+                  labelText: 'Email',
+                  errorText: _emailError,
+                  prefixIcon: const Icon(Icons.mail_outline_rounded),
+                ),
+              ),
+              if (!context.read<SyncService>().loggedIn) ...[
+                const SizedBox(height: 12),
+                PasswordField(
+                  controller: _pass,
+                  label: editing ? 'Password (optional)' : 'Password',
+                  helper: editing
+                      ? 'Add one to back up your library and get it on other phones.'
+                      : 'Been here before? Your playlists and favourites come back. New? This creates your account.',
+                  error: _passError,
+                  onChanged: (_) => setState(() => _passError = null),
+                ),
+              ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: _name,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.done,
+                onChanged: (_) => setState(() => _nameError = null),
+                decoration: InputDecoration(
+                  labelText: editing ? 'Your name' : 'Your name (if you\'re new)',
+                  errorText: _nameError,
+                  prefixIcon: const Icon(Icons.person_outline_rounded),
+                ),
               ),
               section(
                 'Profile picture',
@@ -240,25 +337,6 @@ class _SignInScreenState extends State<SignInScreen> {
                       _AvatarChoice(selected: _avatar == '${Profile.emojiPrefix}$e', onTap: () => setState(() => _avatar = '${Profile.emojiPrefix}$e'), child: Text(e, style: const TextStyle(fontSize: 20))),
                   ]),
                 ]),
-              ),
-              const SizedBox(height: 24),
-              TextField(
-                controller: _name,
-                textCapitalization: TextCapitalization.words,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(labelText: 'Your name', prefixIcon: Icon(Icons.person_outline_rounded)),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                onChanged: (_) => setState(() => _emailError = null),
-                decoration: InputDecoration(
-                  labelText: 'Email',
-                  helperText: 'Required. It identifies your account.',
-                  errorText: _emailError,
-                  prefixIcon: const Icon(Icons.mail_outline_rounded),
-                ),
               ),
               section('Languages you love', 'Sets what shows on your home page', chips(Catalog.languageChoices, _languages)),
               section('Moods you like', 'We\'ll put these first', chips(_moodChoices, _moods)),
@@ -316,7 +394,7 @@ class _SignInScreenState extends State<SignInScreen> {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'Your profile is saved on this phone and copied to Samgeet\'s server; signing out deletes the copy. Playlists, favourites and history stay on this phone. There is no password.',
+                    'Your profile, playlists, favourites, history and settings are saved on this phone and synced to your account on Samgeet\'s server. Sign in with the same email and password on any phone to get them. Your password never leaves the phone and can\'t be reset, so remember it. Uploaded photos stay on this phone.',
                     style: TextStyle(color: AppColors.muted, fontSize: 12, height: 1.4),
                   ),
                 ),

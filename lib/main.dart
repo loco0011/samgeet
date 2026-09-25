@@ -8,6 +8,7 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'data/sync_service.dart';
 import 'data/cloud_service.dart';
 import 'data/library_store.dart';
 import 'data/saavn_api.dart';
@@ -42,12 +43,19 @@ Future<void> main() async {
   await session.configure(const AudioSessionConfiguration.music());
 
   final library = await LibraryStore.load();
-  library.cloud = CloudService(await SharedPreferences.getInstance());
+  final prefs = await SharedPreferences.getInstance();
+  library.cloud = CloudService(prefs);
+  final sync = library.sync = SyncService(prefs)..beforeSnapshot = library.flush;
   unawaited(library.cloud!.retryPending(library.profile));
   final api = SaavnApi();
   final reco = RecommendationService(api, library);
   final player = PlayerController(api: api, library: library, reco: reco);
   final mood = MoodController(player, library);
+  sync.onRemoteApplied = () async {
+    library.reload();
+    await player.fx.reload();
+  };
+  unawaited(sync.start());
 
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -57,7 +65,7 @@ Future<void> main() async {
   ));
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  runApp(SamgeetApp(api: api, library: library, reco: reco, player: player, mood: mood));
+  runApp(SamgeetApp(api: api, library: library, reco: reco, player: player, mood: mood, sync: sync));
 }
 
 class SamgeetApp extends StatelessWidget {
@@ -66,8 +74,9 @@ class SamgeetApp extends StatelessWidget {
   final RecommendationService reco;
   final PlayerController player;
   final MoodController mood;
+  final SyncService sync;
 
-  const SamgeetApp({super.key, required this.api, required this.library, required this.reco, required this.player, required this.mood});
+  const SamgeetApp({super.key, required this.api, required this.library, required this.reco, required this.player, required this.mood, required this.sync});
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +87,7 @@ class SamgeetApp extends StatelessWidget {
         ChangeNotifierProvider<LibraryStore>.value(value: library),
         ChangeNotifierProvider<PlayerController>.value(value: player),
         ChangeNotifierProvider<MoodController>.value(value: mood),
+        ChangeNotifierProvider<SyncService>.value(value: sync),
       ],
       child: MaterialApp(
         title: 'Samgeet',

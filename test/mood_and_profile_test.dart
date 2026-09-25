@@ -109,7 +109,7 @@ void main() {
       lib = await LibraryStore.load();
       expect(lib.profile?.name, 'Asha');
       expect(lib.profile?.moods, ['romantic']);
-      lib.signOut();
+      await lib.signOut();
       await lib.flush();
       lib = await LibraryStore.load();
       expect(lib.signedIn, isFalse);

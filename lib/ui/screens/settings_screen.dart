@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/sync_service.dart';
 import '../../data/catalog.dart';
 import '../../data/library_store.dart';
 import '../../data/track.dart';
@@ -9,6 +10,7 @@ import '../nav.dart';
 import '../widgets/common.dart';
 import '../widgets/glass.dart';
 import '../widgets/profile_avatar.dart';
+import '../widgets/account_widgets.dart';
 import '../mood_theme.dart';
 import '../../app_info.dart';
 import 'about_screen.dart';
@@ -66,8 +68,25 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     TextButton(onPressed: () => pushPage(context, const SignInScreen()), child: const Text('Edit')),
                     TextButton(
-                      onPressed: () {
-                        lib.signOut();
+                      onPressed: () async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Sign out?'),
+                            content: Text(
+                              context.read<SyncService>().loggedIn
+                                  ? 'This phone stops syncing. Your library stays in your account: sign in again with your email and password to get it back.'
+                                  : 'Your playlists and favourites stay on this phone, but they aren\'t backed up: you haven\'t set a password yet.',
+                            ),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                              FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.redAccent), onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign out')),
+                            ],
+                          ),
+                        );
+                        if (ok != true || !context.mounted) return;
+                        await lib.signOut();
+                        if (!context.mounted) return;
                         toast(context, 'Signed out');
                       },
                       child: const Text('Sign out', style: TextStyle(color: Colors.redAccent)),
@@ -82,6 +101,22 @@ class SettingsScreen extends StatelessWidget {
                   ]),
           ),
         ),
+        if (lib.signedIn)
+          ListenableBuilder(
+            listenable: context.read<SyncService>(),
+            builder: (context, _) {
+              final s = context.read<SyncService>();
+              final ok = s.status == SyncStatus.synced || s.status == SyncStatus.syncing;
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(26, 10, 20, 0),
+                child: Row(children: [
+                  Icon(ok ? Icons.cloud_done_rounded : Icons.cloud_off_rounded, size: 16, color: ok ? moodPalette(context).light : AppColors.muted),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(syncStatusText(s), style: const TextStyle(color: AppColors.muted, fontSize: 12.5))),
+                ]),
+              );
+            },
+          ),
         section('Accent style'),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),

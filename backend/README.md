@@ -1,8 +1,9 @@
 # Samgeet backend (PHP + MySQL on Hostinger)
 
-A tiny API that keeps a copy of each signed-in listener's **profile**: name, email, icon or emoji,
-favourite languages, moods and singers, and device details only if they opted in.
-Playlists, favourites, history and uploaded photos stay on the phone.
+A tiny API that keeps a copy of each signed-in listener's **profile** (name, email, icon or emoji,
+favourite languages, moods and singers, and device details only if they opted in) and a **synced copy** of
+their library (playlists, favourites, history, settings), so signing in with the same email and password on
+any phone, or after a reinstall, brings it all back. Uploaded photos stay on the phone.
 
 The app never talks to MySQL directly. The database password lives only in `api/config.php`
 on the server, which is git-ignored.
@@ -14,7 +15,7 @@ on the server, which is git-ignored.
 2. **Point a subdomain at the hosting.** The main site is on Netlify (no PHP), so the API lives on
    its own subdomain, `api.sambitmaity.fun`: add an **A** record `api` -> the Hostinger server IP in
    the domain's DNS, then add the subdomain in hPanel -> Domains -> Subdomains and enable its SSL.
-   Upload `api/profile.php` and `api/.htaccess` into that subdomain's folder.
+   Upload `api/profile.php`, `api/backup.php` and `api/.htaccess` into that subdomain's folder.
 3. **Add the credentials.** Create `config.php` from `api/config.sample.php` and fill in your real
    database name, user and password (the host stays `localhost`). Best: save it as
    `samgeet_config.php` **outside** `public_html`, in the site's own folder (the one that contains
@@ -33,7 +34,14 @@ The app's API address is `CloudService.baseUrl` in `lib/data/cloud_service.dart`
 - Signing out deletes that install's row from the server.
 - Only the sha256 of each install's secret is stored, so nobody can edit another profile.
 - Requests are limited to 60 per IP every 10 minutes (`api_hits` table); the app retries later.
-- The API only writes. It has no endpoint that returns anyone's profile.
+- `profile.php` only writes. It has no endpoint that returns anyone's profile.
+- `backup.php` holds each account's library. The account key is derived on the phone from the email and
+  password (PBKDF2, 150,000 rounds, salted with the email); the password never leaves the phone and the
+  server stores only a hash of the key, so a forgotten password can't be reset. Libraries are gzip'd JSON of
+  the app's saved settings, stored as-is. Every save names the `rev` it built on, so two phones syncing at
+  once merge instead of overwriting each other. `email_hash` lets sign-in say "wrong password for this
+  email" instead of quietly creating a second account (it does reveal whether an email has an account).
+  Signing out only stops syncing on that phone; the account stays.
 - Change the database password if it was ever shared outside hPanel.
 
 ## Share page (`api/share.php`)

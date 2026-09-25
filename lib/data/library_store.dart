@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/taste_profile.dart';
+import 'sync_service.dart';
 import 'cloud_service.dart';
 import 'profile.dart';
 import 'track.dart';
@@ -61,6 +62,9 @@ class LibraryStore extends ChangeNotifier {
 
   /// Online copy of the profile. Left null in tests and when offline-only.
   CloudService? cloud;
+
+  /// Keeps this library the same on every phone logged in to the account. Null in tests.
+  SyncService? sync;
 
   /// Which dark accent style the app wears when a song has no clear mood.
   String accent = 'ember';
@@ -122,6 +126,24 @@ class LibraryStore extends ChangeNotifier {
     _dirty.add(key);
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 500), flush);
+    if (signedIn) sync?.schedule();
+  }
+
+  /// Re-reads everything from storage, after a sync brought changes from another phone.
+  void reload() {
+    _saveTimer?.cancel();
+    _dirty.clear();
+    favorites.clear();
+    _favIds.clear();
+    playlists.clear();
+    history.clear();
+    followedArtists.clear();
+    recentSearches.clear();
+    taste = TasteProfile();
+    languages = ['hindi', 'bengali', 'english'];
+    profile = null;
+    _read();
+    notifyListeners();
   }
 
   Future<void> flush() async {
@@ -330,13 +352,15 @@ class LibraryStore extends ChangeNotifier {
     if (c != null) unawaited(c.saveProfile(p));
   }
 
-  void signOut() {
+  /// Signs out on this phone. Syncing stops first, so the account (and other phones) keep the profile.
+  Future<void> signOut() async {
+    await sync?.logOut();
     final photo = profile?.photoPath; // the uploaded picture goes with the profile
     if (photo != null) File(photo).delete().catchError((_) => File(photo));
     profile = null;
     _changed('profile');
     final c = cloud;
-    if (c != null) unawaited(c.deleteProfile()); // the server copy goes too
+    if (c != null) unawaited(c.deleteProfile()); // this phone's profile copy goes too
   }
 
   void setAccent(String id) {

@@ -19,6 +19,20 @@ CREATE TABLE IF NOT EXISTS profiles (
   KEY idx_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Synced libraries (playlists, favourites, history, settings), one per account.
+CREATE TABLE IF NOT EXISTS backups (
+  code_hash  CHAR(64)     NOT NULL,           -- sha256 of the account key (derived on the phone from email + password)
+  data       MEDIUMTEXT   NOT NULL,           -- base64 of gzip'd JSON, opaque to the server
+  rev        INT UNSIGNED NOT NULL DEFAULT 1, -- bumped on every save; a save must name the rev it built on
+  email_hash CHAR(64)     NULL,               -- sha256 of the email, so sign-in can say "wrong password"
+  updated_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (code_hash),
+  KEY idx_email_hash (email_hash)
+) ENGINE=InnoDB DEFAULT CHARSET=ascii;
+-- Created the table before sync existed? Add the new columns once:
+--   ALTER TABLE backups ADD COLUMN rev INT UNSIGNED NOT NULL DEFAULT 1 AFTER data,
+--     ADD COLUMN email_hash CHAR(64) NULL AFTER rev, ADD KEY idx_email_hash (email_hash);
+
 -- Per-IP request counter used to rate-limit the API (rows are purged automatically).
 CREATE TABLE IF NOT EXISTS api_hits (
   ip_hash CHAR(64)     NOT NULL,        -- sha256 of the caller's IP, never the IP itself
