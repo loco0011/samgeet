@@ -89,10 +89,7 @@ class FancyDialog extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
                 child: Column(children: [
-                  SizedBox(
-                    width: double.infinity,
-                    child: Center(child: GradientButton(label: primaryLabel, icon: primaryIcon, onTap: onPrimary)),
-                  ),
+                  SizedBox(width: double.infinity, child: GradientButton(label: primaryLabel, icon: primaryIcon, onTap: onPrimary, expand: true)),
                   if (secondary.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Wrap(alignment: WrapAlignment.center, spacing: 4, children: secondary),

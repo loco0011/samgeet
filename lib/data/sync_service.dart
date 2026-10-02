@@ -43,9 +43,10 @@ class SyncService extends ChangeNotifier {
   static const _local = {
     _keyPref, _emailPref, _basePref, _revPref, _lastPref, _pendingPref, _elsewherePref, //
     'installKey', 'cloudSavePending', 'cloudDeletePending', 'themeMood', nudgePref, //
-    ApiClient.sessionPref, 'apiClockSkew', 'analyticsQueue', 'notifSeen', 'update_skip_version', 'update_last_check',
+    ApiClient.sessionPref, 'apiClockSkew', 'analyticsQueue', 'notifSeen', 'update_skip_version', 'update_last_check', 'update_required',
     'dl.index', 'dl.quality', // downloads are files on this phone
     'dailyMix', // rebuilt on each phone every day
+    'adminToken', 'adminExpires', // the admin sign-in stays on this phone
   };
 
   /// Lists of JSON objects that merge item by item, newest first, with an optional cap.

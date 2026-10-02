@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app_info.dart';
+import '../../data/app_config.dart';
+import '../../data/release_notes.dart';
+import '../../data/update_service.dart';
 import '../mood_theme.dart';
 import '../nav.dart';
 import '../theme.dart';
@@ -62,6 +66,7 @@ class AboutScreen extends StatelessWidget {
           ]),
         ),
         const SizedBox(height: 26),
+        const _WhatsNew(),
         card(
           Icons.person_rounded,
           'Created by $kAuthor',
@@ -164,5 +169,60 @@ class AboutScreen extends StatelessWidget {
         const Center(child: Text('$kCopyright · $kAppName', style: TextStyle(color: AppColors.muted, fontSize: 12))),
       ]),
     );
+  }
+}
+
+/// What's new in the installed version (headlines, with the full notes a tap away), and, when a
+/// newer version is out, what it brings.
+class _WhatsNew extends StatelessWidget {
+  const _WhatsNew();
+
+  @override
+  Widget build(BuildContext context) {
+    final mood = moodPalette(context);
+    final update = context.watch<AppConfig>().update;
+    Widget section({required IconData icon, required String title, required List<Highlight> items, required String notes, required String version, Widget? action}) =>
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: GlassBox(
+            radius: 22,
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(icon, size: 20, color: mood.light),
+                const SizedBox(width: 10),
+                Expanded(child: Text(title, style: const TextStyle(fontFamily: kDisplay, fontWeight: FontWeight.w800, fontSize: 15.5))),
+              ]),
+              const SizedBox(height: 10),
+              HighlightList(highlights: items),
+              if (action != null) ...[const SizedBox(height: 12), action],
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(onPressed: () => showUpdateDetails(context, version, notes), child: const Text('All the details')),
+              ),
+            ]),
+          ),
+        );
+    return Column(children: [
+      if (update != null)
+        section(
+          icon: Icons.rocket_launch_rounded,
+          title: 'Samgeet ${update.version} is ready',
+          items: update.highlights.take(6).toList(),
+          notes: update.notes,
+          version: update.version,
+          action: SizedBox(
+            width: double.infinity,
+            child: GradientButton(label: 'Download update', icon: Icons.download_rounded, expand: true, onTap: () => checkForUpdate(context, manual: true)),
+          ),
+        ),
+      section(
+        icon: Icons.auto_awesome_rounded,
+        title: "What's new in $kVersionName",
+        items: Highlight.parse(kReleaseNotes),
+        notes: AppUpdate.cleanNotes(kReleaseNotes),
+        version: kVersionName,
+      ),
+    ]);
   }
 }

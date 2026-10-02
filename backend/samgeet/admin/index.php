@@ -11,6 +11,10 @@ require __DIR__ . '/../lib/bootstrap.php';
 const IDLE_LIMIT = 7200;      // signed out after 2 hours without a click
 const ABSOLUTE_LIMIT = 43200; // and after 12 hours in any case
 const IST = '+05:30';         // reports are shown in Indian time
+const NOTIFY_STYLES = ['info' => 'Info', 'celebrate' => 'Celebrate', 'warning' => 'Warning'];
+const NOTIFY_SHOW = ['both' => 'Popup + phone notification', 'popup' => 'Popup in the app only', 'system' => 'Phone notification only'];
+const NOTIFY_ACTIONS = ['none' => 'No link', 'update' => 'Update the app', 'url' => 'Open a link', 'search' => 'Search for…'];
+const NOTIFY_AUDIENCE = ['all' => 'Everyone', 'signed_in' => 'Signed-in listeners', 'guests' => 'Guests', 'below_build' => 'Older app versions'];
 
 $https = ($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off'
     || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
@@ -249,9 +253,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     from_ist((string)($_POST['starts_at'] ?? '')), from_ist((string)($_POST['ends_at'] ?? '')), $admin['id'],
                 ]);
             go('notifications', [], 'Sent. Phones pick it up when the app opens, or within 30 minutes while it is running.');
+        case 'notify_resend':
+            $pdo->prepare('INSERT INTO notifications (title, body, image_url, style, action, action_value, action_label, show_as, audience, audience_build, created_by)
+                           SELECT title, body, image_url, style, action, action_value, action_label, show_as, audience, audience_build, ?
+                           FROM notifications WHERE id = ?')->execute([$admin['id'], $id]);
+            go('notifications', [], 'Sent again as a new message. The original stays in the history as it was.');
         case 'notify_toggle':
             $pdo->prepare('UPDATE notifications SET active = 1 - active WHERE id = ?')->execute([$id]);
-            go('notifications', [], 'Updated.');
+            go('notification', ['id' => $id], 'Updated.');
         case 'notify_delete':
             $pdo->prepare('DELETE FROM notifications WHERE id = ?')->execute([$id]);
             go('notifications', [], 'Deleted.');
@@ -314,6 +323,9 @@ switch ($page) {
         break;
     case 'notifications':
         page_notifications($pdo);
+        break;
+    case 'notification':
+        page_notification($pdo, (int)($_GET['id'] ?? 0));
         break;
     case 'export':
         page_export();
@@ -815,76 +827,168 @@ function github_latest(): array
     return ['version' => ltrim((string)($j['tag_name'] ?? ''), 'vV'), 'notes' => trim(str_ireplace('[required]', '', $cut)), 'apk_url' => $apk, 'sha256' => strtolower($m[0] ?? '')];
 }
 
+
+function notify_stats(PDO $pdo, string $where = '1', array $args = [], string $tail = ''): array
+{
+    return rows($pdo, "SELECT n.*, COUNT(r.device_id) AS delivered, COALESCE(SUM(r.opened_at IS NOT NULL), 0) AS opened,
+                              COALESCE(SUM(r.dismissed_at IS NOT NULL), 0) AS dismissed
+                       FROM notifications n LEFT JOIN notification_receipts r ON r.notification_id = n.id
+                       WHERE $where GROUP BY n.id $tail", $args);
+}
+
+/// How a message looks in the app (the same card as the popup).
+function notify_preview(array $n): string
+{
+    $icon = ['celebrate' => '🎉', 'warning' => '📣'][$n['style']] ?? '🔔';
+    $img = $n['image_url'] !== '' ? '<img src="' . h($n['image_url']) . '" alt="" loading="lazy">' : '<span class="pv-ic">' . $icon . '</span>';
+    $label = $n['action_label'] !== '' ? $n['action_label'] : (['update' => 'Update now', 'search' => 'Search', 'url' => 'Open'][$n['action']] ?? 'Got it');
+    return '<div class="pv" data-style="' . h($n['style']) . '"><div class="pv-head">' . $img . '</div><div class="pv-body"><span class="pv-badge">FROM SAMGEET</span>'
+        . '<b>' . h($n['title']) . '</b><p>' . nl2br(h($n['body'])) . '</p><span class="pv-cta">' . h($label) . '</span></div></div>';
+}
+
+function notify_actions(array $n, bool $withDelete = false): string
+{
+    $id = (int)$n['id'];
+    $f = fn(string $do, string $label, string $cls = '', string $confirm = '') => '<form method="post" action="?p=notifications" class="inline"'
+        . ($confirm ? ' data-confirm="' . h($confirm) . '"' : '') . '>' . csrf_field() . '<input type="hidden" name="id" value="' . $id . '">'
+        . '<button class="' . $cls . '" name="do" value="' . $do . '">' . $label . '</button></form>';
+    return '<div class="n-actions">'
+        . '<a class="btn-link" href="?p=notification&amp;id=' . $id . '">View</a>'
+        . $f('notify_resend', 'Send again', 'primary-soft', 'Send this message again to ' . strtolower(NOTIFY_AUDIENCE[$n['audience']] ?? 'everyone') . '? It goes out as a new message; this one stays in the list as it is.')
+        . '<a class="btn-link" href="?p=notifications&amp;copy=' . $id . '#notify">Edit as new</a>'
+        . $f('notify_toggle', $n['active'] ? 'Stop' : 'Resume')
+        . ($withDelete ? $f('notify_delete', 'Delete', 'danger', 'Delete this message and its numbers for good?') : '')
+        . '</div>';
+}
+
 function page_notifications(PDO $pdo): void
 {
-    $list = rows($pdo, 'SELECT n.*, COUNT(r.device_id) AS delivered, SUM(r.opened_at IS NOT NULL) AS opened, SUM(r.dismissed_at IS NOT NULL) AS dismissed
-                        FROM notifications n LEFT JOIN notification_receipts r ON r.notification_id = n.id
-                        GROUP BY n.id ORDER BY n.created_at DESC LIMIT 100');
+    $per = 15;
+    $pageNo = max(1, (int)($_GET['n'] ?? 1));
+    $total = (int)scalar($pdo, 'SELECT COUNT(*) FROM notifications');
+    $list = notify_stats($pdo, '1', [], 'ORDER BY n.id DESC LIMIT ' . $per . ' OFFSET ' . (($pageNo - 1) * $per));
+    $copy = null;
+    if (isset($_GET['copy'])) $copy = rows($pdo, 'SELECT * FROM notifications WHERE id = ?', [(int)$_GET['copy']])[0] ?? null;
+    $v = fn(string $k, string $default = '') => h($copy[$k] ?? $default);
+    $sel = fn(string $k, string $opt, string $default) => (($copy[$k] ?? $default) === $opt) ? ' selected' : '';
     ?>
-    <h1>Notifications</h1>
+    <h1>Notifications <small><?= num($total) ?> sent</small></h1>
     <p class="muted">Shown as a popup inside the app, a notification on the phone, or both. Phones pick new ones up when the app
-      opens and every 30 minutes while it runs (music playing in the background counts).</p>
-    <div class="grid2">
-      <section class="card">
-        <h2>New notification</h2>
-        <form method="post" action="?p=notifications" class="form" id="notify"><?= csrf_field() ?><input type="hidden" name="do" value="notify_save">
-          <label>Title<input name="title" maxlength="120" required placeholder="New in Samgeet: offline downloads"></label>
-          <label>Message<textarea name="body" rows="4" maxlength="2000" required placeholder="Save songs and listen without internet."></textarea></label>
-          <label>Picture link <small>(optional, https)</small><input name="image_url" type="url" placeholder="https://..."></label>
+      opens and every 30 minutes while it runs. Every message stays in the history with its numbers; sending one again makes a new copy.</p>
+    <div class="notify-grid">
+      <section class="card" id="notify">
+        <h2><?= $copy ? 'Edit as a new message' : 'New message' ?></h2>
+        <?php if ($copy): ?><p class="muted small">Copied from “<?= h($copy['title']) ?>”. Sending creates a new message; the original stays as it was. <a href="?p=notifications">Start blank</a></p><?php endif; ?>
+        <form method="post" action="?p=notifications" class="form" id="notify-form"><?= csrf_field() ?><input type="hidden" name="do" value="notify_save">
+          <label>Title<input name="title" maxlength="120" required placeholder="New in Samgeet: offline downloads" value="<?= $v('title') ?>"></label>
+          <label>Message<textarea name="body" rows="4" maxlength="2000" required placeholder="Save songs and listen without internet."><?= $v('body') ?></textarea></label>
+          <label>Picture link <small>(optional, https)</small><input name="image_url" type="url" placeholder="https://..." value="<?= $v('image_url') ?>"></label>
           <div class="row2">
-            <label>Look<select name="style"><option value="info">Info</option><option value="celebrate">Celebrate</option><option value="warning">Warning</option></select></label>
-            <label>Show as<select name="show_as"><option value="both">Popup + phone notification</option><option value="popup">Popup in the app only</option><option value="system">Phone notification only</option></select></label>
+            <label>Look<select name="style"><?php foreach (NOTIFY_STYLES as $k => $l): ?><option value="<?= $k ?>"<?= $sel('style', $k, 'info') ?>><?= $l ?></option><?php endforeach; ?></select></label>
+            <label>Show as<select name="show_as"><?php foreach (NOTIFY_SHOW as $k => $l): ?><option value="<?= $k ?>"<?= $sel('show_as', $k, 'both') ?>><?= $l ?></option><?php endforeach; ?></select></label>
           </div>
           <div class="row2">
-            <label>Button<select name="action" id="action"><option value="none">No button</option><option value="update">Update the app</option><option value="url">Open a link</option><option value="search">Search for…</option></select></label>
-            <label>Button text<input name="action_label" maxlength="40" placeholder="Try it"></label>
+            <label>Button<select name="action" id="action"><?php foreach (NOTIFY_ACTIONS as $k => $l): ?><option value="<?= $k ?>"<?= $sel('action', $k, 'none') ?>><?= $l ?></option><?php endforeach; ?></select></label>
+            <label>Button text<input name="action_label" maxlength="40" placeholder="Try it" value="<?= $v('action_label') ?>"></label>
           </div>
-          <label id="action-value">Link or search text<input name="action_value" maxlength="400"></label>
+          <label id="action-value">Link or search text<input name="action_value" maxlength="400" value="<?= $v('action_value') ?>"></label>
           <div class="row2">
-            <label>Who<select name="audience" id="audience"><option value="all">Everyone</option><option value="signed_in">Signed-in listeners</option><option value="guests">Guests</option><option value="below_build">Older app versions</option></select></label>
-            <label id="audience-build">Older than build<input name="audience_build" type="number" min="1"></label>
+            <label>Who<select name="audience" id="audience"><?php foreach (NOTIFY_AUDIENCE as $k => $l): ?><option value="<?= $k ?>"<?= $sel('audience', $k, 'all') ?>><?= $l ?></option><?php endforeach; ?></select></label>
+            <label id="audience-build">Older than build<input name="audience_build" type="number" min="1" value="<?= $v('audience_build') ?>"></label>
           </div>
           <div class="row2">
             <label>Start <small>(IST, empty = now)</small><input name="starts_at" type="datetime-local"></label>
             <label>Stop <small>(IST, optional)</small><input name="ends_at" type="datetime-local"></label>
           </div>
-          <div class="preview" id="preview"><div class="pv-icon">♪</div><div><b id="pv-title">Title</b><p id="pv-body">Message</p><span id="pv-btn" class="pv-btn">Button</span></div></div>
+          <div class="muted small">How it looks in the app</div>
+          <div id="live-preview"><?= notify_preview(['title' => $copy['title'] ?? 'Title', 'body' => $copy['body'] ?? 'Message', 'image_url' => $copy['image_url'] ?? '', 'style' => $copy['style'] ?? 'info', 'action' => $copy['action'] ?? 'none', 'action_label' => $copy['action_label'] ?? '']) ?></div>
           <button class="primary">Send</button>
         </form>
       </section>
+
       <section class="card">
-        <h2>Sent</h2>
-        <table><tr><th>Notification</th><th class="r">Reached</th><th class="r">Opened</th><th></th></tr>
-          <?php foreach ($list as $n): ?>
-            <tr><td><b><?= h($n['title']) ?></b> <?= $n['active'] ? '' : '<span class="tag">stopped</span>' ?>
-                <div class="muted small"><?= h(mb_strimwidth($n['body'], 0, 90, '…')) ?></div>
-                <div class="muted small"><?= h($n['show_as']) ?> · <?= h(str_replace('_', ' ', $n['audience'])) ?><?= $n['audience_build'] ? ' ' . (int)$n['audience_build'] : '' ?> · <?= ist($n['starts_at']) ?><?= $n['ends_at'] ? ' → ' . ist($n['ends_at']) : '' ?></div></td>
-              <td class="r"><?= num($n['delivered']) ?></td>
-              <td class="r"><?= num($n['opened']) ?><?= $n['delivered'] ? ' <span class="muted small">(' . round(100 * $n['opened'] / $n['delivered']) . '%)</span>' : '' ?></td>
-              <td class="r nowrap">
-                <form method="post" action="?p=notifications" class="inline"><?= csrf_field() ?><input type="hidden" name="id" value="<?= (int)$n['id'] ?>"><button name="do" value="notify_toggle"><?= $n['active'] ? 'Stop' : 'Resume' ?></button></form>
-                <form method="post" action="?p=notifications" class="inline" data-confirm="Delete this notification and its stats?"><?= csrf_field() ?><input type="hidden" name="id" value="<?= (int)$n['id'] ?>"><button class="danger" name="do" value="notify_delete">Delete</button></form>
-              </td></tr>
-          <?php endforeach; if (!$list): ?><tr><td colspan="4" class="muted">Nothing sent yet.</td></tr><?php endif; ?>
-        </table>
+        <h2>History</h2>
+        <?php if (!$list): ?><p class="muted">Nothing sent yet.</p><?php endif; ?>
+        <ul class="n-list">
+          <?php foreach ($list as $n): $rate = $n['delivered'] ? round(100 * $n['opened'] / $n['delivered']) : null; ?>
+            <li class="n-item">
+              <a class="n-thumb" href="?p=notification&amp;id=<?= (int)$n['id'] ?>" data-style="<?= h($n['style']) ?>"><?php if ($n['image_url'] !== ''): ?><img src="<?= h($n['image_url']) ?>" alt="" loading="lazy"><?php else: ?><span><?= ['celebrate' => '🎉', 'warning' => '📣'][$n['style']] ?? '🔔' ?></span><?php endif; ?></a>
+              <div class="n-main">
+                <div class="n-top"><a class="n-title" href="?p=notification&amp;id=<?= (int)$n['id'] ?>"><?= h($n['title']) ?></a>
+                  <?= $n['active'] ? '<span class="tag ok">live</span>' : '<span class="tag">stopped</span>' ?></div>
+                <div class="n-text"><?= h($n['body']) ?></div>
+                <div class="n-meta"><?= ist($n['starts_at'], 'd M Y, H:i') ?> · <?= h(NOTIFY_AUDIENCE[$n['audience']] ?? $n['audience']) ?> · <?= h(NOTIFY_SHOW[$n['show_as']] ?? $n['show_as']) ?></div>
+                <div class="n-stats"><span><b><?= num($n['delivered']) ?></b> reached</span><span><b><?= num($n['opened']) ?></b> opened<?= $rate !== null ? ' (' . $rate . '%)' : '' ?></span><span><b><?= num($n['dismissed']) ?></b> closed</span></div>
+                <?= notify_actions($n) ?>
+              </div>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+        <?php if ($total > $per): ?><div class="pager">
+          <?php if ($pageNo > 1): ?><a href="?p=notifications&amp;n=<?= $pageNo - 1 ?>">← Newer</a><?php else: ?><span></span><?php endif; ?>
+          <span class="muted small">Page <?= $pageNo ?> of <?= (int)ceil($total / $per) ?></span>
+          <?php if ($pageNo * $per < $total): ?><a href="?p=notifications&amp;n=<?= $pageNo + 1 ?>">Older →</a><?php else: ?><span></span><?php endif; ?>
+        </div><?php endif; ?>
       </section>
     </div>
     <script nonce="<?= h($GLOBALS['nonce']) ?>">
       (function () {
-        const f = document.getElementById('notify'), $ = id => document.getElementById(id);
+        const f = document.getElementById('notify-form'), $ = id => document.getElementById(id);
+        const esc = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         function sync() {
-          const a = f.action.value, show = a === 'url' || a === 'search';
-          $('action-value').style.display = show ? '' : 'none';
+          const a = f.action.value;
+          $('action-value').style.display = a === 'url' || a === 'search' ? '' : 'none';
           $('audience-build').style.display = f.audience.value === 'below_build' ? '' : 'none';
-          $('pv-title').textContent = f.title.value || 'Title';
-          $('pv-body').textContent = f.body.value || 'Message';
-          $('pv-btn').textContent = f.action_label.value || (a === 'update' ? 'Update now' : a === 'search' ? 'Search' : 'Open');
-          $('pv-btn').style.display = a === 'none' ? 'none' : '';
-          $('preview').dataset.style = f.style.value;
+          const pv = $('live-preview').querySelector('.pv');
+          pv.dataset.style = f.style.value;
+          pv.querySelector('b').textContent = f.title.value || 'Title';
+          pv.querySelector('p').innerHTML = esc(f.body.value || 'Message').replace(/\n/g, '<br>');
+          pv.querySelector('.pv-cta').textContent = f.action_label.value || ({ update: 'Update now', search: 'Search', url: 'Open' }[a] || 'Got it');
+          const head = pv.querySelector('.pv-head'), img = f.image_url.value.trim();
+          head.innerHTML = /^https:\/\//.test(img) ? '<img alt="" src="' + esc(img) + '">' : '<span class="pv-ic">' + ({ celebrate: '🎉', warning: '📣' }[f.style.value] || '🔔') + '</span>';
         }
-        f.addEventListener('input', sync); sync();
+        f.addEventListener('input', sync); f.addEventListener('change', sync); sync();
       })();
     </script>
+    <?php
+}
+
+function page_notification(PDO $pdo, int $id): void
+{
+    $n = notify_stats($pdo, 'n.id = ?', [$id])[0] ?? null;
+    if (!$n) {
+        echo '<p><a href="?p=notifications">← Notifications</a></p><h1>Not found</h1>';
+        return;
+    }
+    $copies = rows($pdo, 'SELECT id, starts_at FROM notifications WHERE id <> ? AND title = ? AND body = ? ORDER BY id DESC', [$id, $n['title'], $n['body']]);
+    $d = (int)$n['delivered'];
+    $silent = max(0, $d - (int)$n['opened'] - (int)$n['dismissed']);
+    $bar = fn($x) => $d ? round(100 * $x / $d) : 0;
+    $by = scalar($pdo, 'SELECT email FROM admins WHERE id = ?', [(int)$n['created_by']]);
+    ?>
+    <p><a href="?p=notifications">← Notifications</a></p>
+    <h1><?= h($n['title']) ?> <?= $n['active'] ? '<span class="tag ok">live</span>' : '<span class="tag">stopped</span>' ?></h1>
+    <div class="grid2">
+      <section class="card"><h2>How it looks in the app</h2><?= notify_preview($n) ?></section>
+      <section class="card">
+        <h2>How it did</h2>
+        <div class="funnel">
+          <div><span>Reached phones</span><b><?= num($d) ?></b><i style="width:100%"></i></div>
+          <div><span>Opened</span><b><?= num($n['opened']) ?> <small><?= $bar($n['opened']) ?>%</small></b><i style="width:<?= $bar($n['opened']) ?>%"></i></div>
+          <div><span>Closed</span><b><?= num($n['dismissed']) ?> <small><?= $bar($n['dismissed']) ?>%</small></b><i class="c" style="width:<?= $bar($n['dismissed']) ?>%"></i></div>
+          <div><span>No answer yet</span><b><?= num($silent) ?> <small><?= $bar($silent) ?>%</small></b><i class="s" style="width:<?= $bar($silent) ?>%"></i></div>
+        </div>
+        <table style="margin-top:16px">
+          <tr><td class="muted">Sent</td><td><?= ist($n['starts_at']) ?><?= $n['ends_at'] ? ' → ' . ist($n['ends_at']) : '' ?></td></tr>
+          <tr><td class="muted">To</td><td><?= h(NOTIFY_AUDIENCE[$n['audience']] ?? $n['audience']) ?><?= $n['audience_build'] ? ' (older than build ' . (int)$n['audience_build'] . ')' : '' ?></td></tr>
+          <tr><td class="muted">Shown as</td><td><?= h(NOTIFY_SHOW[$n['show_as']] ?? $n['show_as']) ?></td></tr>
+          <tr><td class="muted">Button</td><td><?= h(NOTIFY_ACTIONS[$n['action']] ?? $n['action']) ?><?= $n['action_value'] !== '' ? ': ' . h($n['action_value']) : '' ?></td></tr>
+          <tr><td class="muted">Sent by</td><td><?= h($by ?: '—') ?></td></tr>
+          <?php if ($copies): ?><tr><td class="muted">Also sent</td><td><?php foreach ($copies as $i => $c): ?><?= $i ? ', ' : '' ?><a href="?p=notification&amp;id=<?= (int)$c['id'] ?>"><?= ist($c['starts_at'], 'd M, H:i') ?></a><?php endforeach; ?></td></tr><?php endif; ?>
+        </table>
+        <?= notify_actions($n, true) ?>
+      </section>
+    </div>
     <?php
 }
 
@@ -990,6 +1094,26 @@ button:hover{border-color:var(--muted)}button.primary{background:linear-gradient
 button.danger{color:var(--danger)}form.inline{display:inline}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.actions form{margin:0}
 .flash{background:rgba(63,178,127,.12);border:1px solid rgba(63,178,127,.35);padding:10px 14px;border-radius:12px;margin-bottom:18px}
 .search{display:flex;gap:8px;margin-bottom:14px;max-width:520px}.pager{display:flex;justify-content:space-between;margin-top:12px}
+.notify-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:18px;align-items:start}
+.pv{max-width:360px;border-radius:24px;overflow:hidden;background:var(--surface2);border:1px solid var(--line);margin:6px 0 4px}
+.pv-head{height:150px;display:grid;place-items:center;background:linear-gradient(135deg,#7a1232,#d0284f 60%,#e0823f)}
+.pv[data-style="celebrate"] .pv-head{background:linear-gradient(135deg,#b5531a,#d0284f 60%,#7a1232)}.pv[data-style="warning"] .pv-head{background:linear-gradient(135deg,#8a5a12,#e0a33f 60%,#7a1232)}
+.pv-head img{width:100%;height:100%;object-fit:cover}.pv-ic{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:30px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35)}
+.pv-body{padding:16px 18px 18px;display:grid;gap:6px}.pv-body b{font:800 17px Sora,sans-serif;color:#fff}.pv-body p{margin:0;color:#d9d9e6;font-size:13.5px;line-height:1.5}
+.pv-badge{justify-self:start;font-size:10.5px;font-weight:800;letter-spacing:.8px;padding:2px 9px;border-radius:20px;background:rgba(208,40,79,.18);color:#ff8aa5}
+.pv-cta{justify-self:center;margin-top:8px;padding:9px 22px;border-radius:30px;font-weight:800;font-size:13px;background:linear-gradient(135deg,#a61f2e,#d0284f 60%,#e0823f);color:#fff}
+.n-list{list-style:none;margin:0;padding:0}.n-item{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}.n-item:last-child{border:0}
+.n-thumb{flex:none;width:64px;height:64px;border-radius:14px;overflow:hidden;display:grid;place-items:center;font-size:26px;background:linear-gradient(135deg,#7a1232,#d0284f 60%,#e0823f);text-decoration:none}
+.n-thumb[data-style="celebrate"]{background:linear-gradient(135deg,#b5531a,#d0284f)}.n-thumb[data-style="warning"]{background:linear-gradient(135deg,#8a5a12,#e0a33f)}.n-thumb img{width:100%;height:100%;object-fit:cover}
+.n-main{flex:1;min-width:0;display:grid;gap:4px}.n-top{display:flex;align-items:center;gap:8px}.n-title{font-weight:800;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.n-text{color:#c9c9d8;font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.n-meta{color:var(--muted);font-size:12px}.n-stats{display:flex;gap:14px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}.n-stats b{color:var(--ink)}
+.n-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center}.n-actions button,.btn-link{font-size:12.5px;padding:6px 11px;border-radius:9px}
+.btn-link{display:inline-block;text-decoration:none;border:1px solid var(--line);background:var(--surface2);font-weight:700}.btn-link:hover{border-color:var(--muted)}
+button.primary-soft{background:rgba(208,40,79,.18);border-color:rgba(255,92,127,.45);color:#ffc2cf}
+.funnel{display:grid;gap:12px}.funnel div{display:grid;grid-template-columns:1fr auto;gap:4px 12px}.funnel span{color:var(--muted)}.funnel small{color:var(--muted);font-weight:500}
+.funnel i{grid-column:1/-1;height:8px;border-radius:6px;background:linear-gradient(90deg,#d0284f,#e0823f)}.funnel i.c{background:#5b6b9a}.funnel i.s{background:rgba(255,255,255,.18)}
+@media (max-width:900px){.notify-grid{grid-template-columns:minmax(0,1fr)}}
 .preview{display:flex;gap:12px;padding:14px;border-radius:16px;background:linear-gradient(135deg,rgba(122,18,50,.55),rgba(24,24,41,.9));border:1px solid var(--line)}
 .preview[data-style="celebrate"]{background:linear-gradient(135deg,rgba(181,83,26,.6),rgba(208,40,79,.45))}
 .preview[data-style="warning"]{background:linear-gradient(135deg,rgba(224,163,63,.35),rgba(24,24,41,.9))}
@@ -1054,7 +1178,7 @@ function render_layout(string $page, array $admin, ?string $flash, string $conte
     global $nonce;
     head('Samgeet admin');
     $nav = ['dashboard' => 'Overview', 'users' => 'Accounts', 'releases' => 'App updates', 'notifications' => 'Notifications', 'export' => 'Export', 'account' => 'My account'];
-    $active = $page === 'user' ? 'users' : $page;
+    $active = $page === 'user' ? 'users' : ($page === 'notification' ? 'notifications' : $page);
     ?><body>
     <div class="top"><a class="brand" href="?p=dashboard"><i>♪</i> Samgeet</a>
       <nav><?php foreach ($nav as $k => $label): ?><a class="<?= $k === $active ? 'on' : '' ?>" href="?p=<?= $k ?>"><?= $label ?></a><?php endforeach; ?></nav>

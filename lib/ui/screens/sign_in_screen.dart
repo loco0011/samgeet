@@ -6,7 +6,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
-import '../../data/catalog.dart';
 import '../../data/device_snapshot.dart';
 import '../../data/library_store.dart';
 import '../../data/profile.dart';
@@ -23,18 +22,6 @@ import '../widgets/player_style_picker.dart';
 /// Palette colours can be deep; lift them so icons stay readable on the dark page.
 Color _lift(Color c) => Color.lerp(c, Colors.white, 0.55)!;
 
-const _moodChoices = <String, String>{
-  'romantic': 'Romantic',
-  'sad': 'Heartbreak',
-  'party': 'Party',
-  'chill': 'Chill',
-  'workout': 'Workout',
-  'focus': 'Focus',
-  'devotional': 'Devotional',
-  'nostalgia': 'Nostalgia',
-  'lofi': 'Lo-fi',
-  'rain': 'Rainy day',
-};
 
 /// Sign in (or edit your profile) and tell Samgeet what you like.
 /// Pops with `true` once a profile has been saved.
@@ -106,6 +93,18 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
+  /// Any one emoji, typed on the phone's own keyboard.
+  Future<void> _pickEmoji() async {
+    final current = _avatar.startsWith(Profile.emojiPrefix) ? _avatar.substring(Profile.emojiPrefix.length) : '';
+    final picked = await showDialog<String>(context: context, builder: (_) => _EmojiDialog(initial: current));
+    if (picked == null || !mounted) return;
+    if (!isEmoji(picked)) {
+      if (picked.isNotEmpty) toast(context, 'That isn\x27t an emoji. Try one from the emoji keyboard.');
+      return;
+    }
+    setState(() => _avatar = '${Profile.emojiPrefix}$picked');
+  }
+
   // New here: email + password (the name is asked for if it's a new account).
   // Editing: name + email, plus a password while this phone isn't signed in to an account yet.
   bool get _valid =>
@@ -113,7 +112,6 @@ class _SignInScreenState extends State<SignInScreen> {
       (!_editing || _name.text.trim().isNotEmpty) &&
       (context.read<SyncService>().loggedIn || _pass.text.isNotEmpty);
 
-  void _toggle(Set<String> set, String v) => setState(() => set.contains(v) ? set.remove(v) : set.add(v));
 
   Future<void> _submit() async {
     if (_saving) return;
@@ -237,6 +235,7 @@ class _SignInScreenState extends State<SignInScreen> {
     final editing = _editing;
     final initials = Profile(name: _name.text, createdAt: 0).initials;
     final hasPhoto = _avatar.startsWith(Profile.photoPrefix);
+    final hasEmoji = _avatar.startsWith(Profile.emojiPrefix);
 
     Widget section(String title, String subtitle, Widget child) => Padding(
           padding: const EdgeInsets.only(top: 26),
@@ -249,9 +248,6 @@ class _SignInScreenState extends State<SignInScreen> {
           ]),
         );
 
-    Widget chips(Map<String, String> choices, Set<String> selected) => Wrap(spacing: 8, runSpacing: 8, children: [
-          for (final e in choices.entries) GlassChip(label: e.value, selected: selected.contains(e.key), onTap: () => _toggle(selected, e.key)),
-        ]);
 
     return Scaffold(
       body: SafeArea(
@@ -350,63 +346,32 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
               section(
                 'Profile picture',
-                'Upload a photo, or pick an icon or emoji',
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-                    ProfileAvatar(initials: initials, avatar: _avatar, size: 68),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Wrap(spacing: 8, runSpacing: 8, children: [
-                        GlassChip(label: hasPhoto ? 'Change photo' : 'Upload photo', icon: Icons.photo_library_rounded, selected: hasPhoto, onTap: _pickPhoto),
-                        if (hasPhoto) GlassChip(label: 'Remove', icon: Icons.delete_outline_rounded, selected: false, onTap: () => setState(() => _avatar = '')),
-                      ]),
-                    ),
-                  ]),
-                  const SizedBox(height: 14),
-                  Wrap(spacing: 8, runSpacing: 8, children: [
-                    _AvatarChoice(selected: _avatar.isEmpty, onTap: () => setState(() => _avatar = ''), child: Text(initials, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13))),
-                    for (final e in kAvatarIcons.entries)
-                      _AvatarChoice(selected: _avatar == e.key, onTap: () => setState(() => _avatar = e.key), child: Icon(e.value, size: 20)),
-                  ]),
-                  const SizedBox(height: 8),
-                  Wrap(spacing: 8, runSpacing: 8, children: [
-                    for (final e in kAvatarEmojis)
-                      _AvatarChoice(selected: _avatar == '${Profile.emojiPrefix}$e', onTap: () => setState(() => _avatar = '${Profile.emojiPrefix}$e'), child: Text(e, style: const TextStyle(fontSize: 20))),
-                  ]),
+                'Upload a photo, or use any emoji from your keyboard',
+                Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                  ProfileAvatar(initials: initials, avatar: _avatar, size: 72),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Wrap(spacing: 8, runSpacing: 8, children: [
+                      GlassChip(label: hasPhoto ? 'Change photo' : 'Upload photo', icon: Icons.photo_library_rounded, selected: hasPhoto, onTap: _pickPhoto),
+                      GlassChip(label: hasEmoji ? 'Change emoji' : 'Use an emoji', icon: Icons.emoji_emotions_outlined, selected: hasEmoji, onTap: _pickEmoji),
+                      if (_avatar.isNotEmpty) GlassChip(label: 'Use initials', icon: Icons.text_fields_rounded, selected: false, onTap: () => setState(() => _avatar = '')),
+                    ]),
+                  ),
                 ]),
               ),
-              section('Languages you love', 'Sets what shows on your home page', chips(Catalog.languageChoices, _languages)),
-              section('Moods you like', 'We\'ll put these first', chips(_moodChoices, _moods)),
-              section(
-                'Favourite singers',
-                'Pick a few — your daily mix starts here',
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  for (final g in Catalog.artistGroups) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2, bottom: 6),
-                      child: Row(children: [
-                        Text(g.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                        if (g.names.any(_artists.contains)) ...[
-                          const SizedBox(width: 8),
-                          Text('${g.names.where(_artists.contains).length} picked', style: TextStyle(color: mood.light, fontSize: 11.5, fontWeight: FontWeight.w700)),
-                        ],
-                      ]),
-                    ),
-                    // One swipeable row per group keeps the long list compact.
-                    SizedBox(
-                      height: 38,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        clipBehavior: Clip.none,
-                        itemCount: g.names.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
-                        itemBuilder: (_, i) => Center(child: GlassChip(dense: true, label: g.names[i], selected: _artists.contains(g.names[i]), onTap: () => _toggle(_artists, g.names[i]))),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                ]),
-              ),
+              const SizedBox(height: 14),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.tune_rounded, size: 16, color: AppColors.muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    editing
+                        ? 'Your languages, moods and favourite singers are in Settings › Your choices.'
+                        : 'After signing in, pick your languages, moods and favourite singers in Settings › Your choices.',
+                    style: const TextStyle(color: AppColors.muted, fontSize: 12.5, height: 1.4),
+                  ),
+                ),
+              ]),
               const SizedBox(height: 22),
               GlassBox(
                 radius: 18,
@@ -456,35 +421,6 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 }
 
-/// One small round option in the profile-picture picker.
-class _AvatarChoice extends StatelessWidget {
-  final bool selected;
-  final VoidCallback onTap;
-  final Widget child;
-  const _AvatarChoice({required this.selected, required this.onTap, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final mood = moodPalette(context);
-    return Pressable(
-      onTap: onTap,
-      scale: 0.9,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 40,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: selected ? mood.accent.withValues(alpha: 0.28) : Colors.white.withValues(alpha: 0.06),
-          border: Border.all(color: selected ? mood.accent : Colors.white24, width: selected ? 2 : 1),
-        ),
-        child: IconTheme(data: IconThemeData(color: selected ? Colors.white : AppColors.muted), child: DefaultTextStyle.merge(style: TextStyle(color: selected ? Colors.white : AppColors.muted), child: child)),
-      ),
-    );
-  }
-}
-
 class _Perk extends StatelessWidget {
   final IconData icon;
   final String text;
@@ -498,4 +434,58 @@ class _Perk extends StatelessWidget {
       Expanded(child: Text(text, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600))),
     ]);
   }
+}
+
+/// Asks for one emoji from the phone's keyboard. Owns its text field's controller, so the field is
+/// only thrown away after the dialog has finished closing.
+class _EmojiDialog extends StatefulWidget {
+  final String initial;
+  const _EmojiDialog({required this.initial});
+
+  @override
+  State<_EmojiDialog> createState() => _EmojiDialogState();
+}
+
+class _EmojiDialogState extends State<_EmojiDialog> {
+  late final _controller = TextEditingController(text: widget.initial);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Pick an emoji'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Tap the smiley key on your keyboard and choose one.', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 40),
+            onChanged: (v) {
+              // Keep only the last emoji typed.
+              final last = v.characters.isEmpty ? '' : v.characters.last;
+              if (last != v) _controller.value = TextEditingValue(text: last, selection: TextSelection.collapsed(offset: last.length));
+            },
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.pink, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(context, _controller.text.trim()),
+            child: const Text('Use it'),
+          ),
+        ],
+      );
+}
+
+/// True for a single emoji (including flags, skin tones and joined ones like 👨‍👩‍👧), not letters or digits.
+bool isEmoji(String s) {
+  if (s.isEmpty || s.characters.length != 1 || s.length > 16) return false;
+  return !RegExp(r'[\p{L}\p{N}\p{P}\p{Sm}\s]', unicode: true).hasMatch(s);
 }

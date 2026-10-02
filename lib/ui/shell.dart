@@ -92,6 +92,11 @@ class _AppShellState extends State<AppShell> {
     final config = context.read<AppConfig>();
     _popupSub = config.popups.listen((a) => _queueDialog(() => showAnnouncement(context, a, onAction: _runAction)));
     _tapSub = config.taps.listen(_runAction);
+    // A required update can't be put off: back in the app, it shows again (the popup also comes
+    // back after the app was swiped away, because every start checks).
+    _lifecycle = AppLifecycleListener(onResume: () {
+      if (mounted && (config.update?.required ?? false)) _queueDialog(() => checkForUpdate(context));
+    });
     // Once the home screen has settled: a newer version from the admin panel? If not, and this
     // version hasn't asked yet, invite a guest to sign in (or an old sign-in to add a password).
     // Messages that arrive meanwhile wait their turn: one popup at a time.
@@ -109,6 +114,7 @@ class _AppShellState extends State<AppShell> {
 
   StreamSubscription<Announcement>? _popupSub;
   StreamSubscription<Announcement>? _tapSub;
+  AppLifecycleListener? _lifecycle;
   Future<void> _dialogs = Future.value();
 
   /// Runs [show] after any popup already on screen has closed.
@@ -209,6 +215,7 @@ class _AppShellState extends State<AppShell> {
     _downloadToasts?.cancel();
     _popupSub?.cancel();
     _tapSub?.cancel();
+    _lifecycle?.dispose();
     _linkSub?.cancel();
     _deepLinks.dispose();
     super.dispose();

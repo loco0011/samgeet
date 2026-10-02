@@ -419,6 +419,24 @@ class LibraryStore extends ChangeNotifier {
   void setLanguages(List<String> l) {
     languages = l.isEmpty ? ['hindi'] : l;
     _changed('settings');
+    final p = profile;
+    if (p != null) updateChoices(languages: languages);
+  }
+
+  /// Settings › Your choices: the languages, moods and singers on the profile. Singers added
+  /// here also tune the recommendations, like the ones picked when signing in.
+  void updateChoices({List<String>? languages, List<String>? moods, List<String>? artists}) {
+    final p = profile;
+    if (p == null) return;
+    final added = artists?.where((a) => !p.artists.contains(a)) ?? const <String>[];
+    for (final a in added) {
+      taste.record(Track(id: 'pref:$a', title: '', artists: [ArtistRef(id: '', name: a)]), TasteEvent.followedArtist);
+    }
+    if (added.isNotEmpty) _touch('taste');
+    profile = p.copyWith(languages: languages, moods: moods, artists: artists);
+    _changed('profile');
+    final c = cloud;
+    if (c != null) unawaited(c.saveProfile(profile!, playerStyle: playerStyle.id));
   }
 
   @override

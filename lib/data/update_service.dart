@@ -7,16 +7,78 @@ import '../app_info.dart';
 import 'app_config.dart';
 import 'cloud_service.dart';
 
+/// One headline from the release notes: "🎨 **Make the player yours.** Pick from…" becomes
+/// (icon: 🎨, title: Make the player yours).
+class Highlight {
+  final String icon; // an emoji, or '' when the note has none
+  final String title;
+  const Highlight(this.icon, this.title);
+
+  /// The headlines of [notes], at most [max]. Bullets with a bold lead give that lead; others give
+  /// their first sentence, kept short.
+  static List<Highlight> parse(String notes, {int max = 8}) {
+    final out = <Highlight>[];
+    for (final line in notes.split('\n')) {
+      final m = RegExp(r'^\s*[-*•]\s+(.*)$').firstMatch(line);
+      if (m == null) continue;
+      var rest = m.group(1)!.trim();
+      // Leading emoji (anything before the first letter, digit or "**").
+      final lead = RegExp(r'^([^\p{L}\p{N}*]+)', unicode: true).firstMatch(rest);
+      var icon = '';
+      if (lead != null) {
+        icon = lead.group(1)!.trim();
+        rest = rest.substring(lead.end).trim();
+      }
+      final bold = RegExp(r'^\*\*(.+?)\*\*').firstMatch(rest);
+      var title = bold != null ? bold.group(1)! : rest.split(RegExp(r'(?<=[.!?])\s')).first;
+      title = title.replaceAll('**', '').trim().replaceFirst(RegExp(r'[.:]$'), '');
+      if (title.length > 48) title = '${title.substring(0, 46).trimRight()}…';
+      if (title.isEmpty) continue;
+      out.add(Highlight(icon, title));
+      if (out.length >= max) break;
+    }
+    return out;
+  }
+}
+
 /// A newer version of the app, as published from the admin panel (or, for builds without the
 /// server key, on the GitHub releases page).
 class AppUpdate {
   final String version; // "1.3.2"
   final String notes; // release notes, lightly cleaned for display
+  final List<Highlight> highlights; // the headlines, for the popup
   final String downloadUrl; // the APK, or the release page if it has none
   final bool required; // no "Later" button
   final int? sizeBytes;
 
-  const AppUpdate({required this.version, required this.notes, required this.downloadUrl, this.required = false, this.sizeBytes});
+  const AppUpdate({
+    required this.version,
+    required this.notes,
+    required this.downloadUrl,
+    this.highlights = const [],
+    this.required = false,
+    this.sizeBytes,
+  });
+
+  Map<String, Object?> toJson() => {
+        'version': version, 'notes': notes, 'url': downloadUrl, 'required': required, 'size': sizeBytes, //
+        'highlights': [for (final h in highlights) [h.icon, h.title]],
+      };
+
+  static AppUpdate? fromJson(Object? j) {
+    if (j is! Map || j['version'] is! String || j['url'] is! String) return null;
+    return AppUpdate(
+      version: j['version'] as String,
+      notes: '${j['notes'] ?? ''}',
+      downloadUrl: j['url'] as String,
+      required: j['required'] == true,
+      sizeBytes: j['size'] is int ? j['size'] as int : null,
+      highlights: [
+        for (final h in (j['highlights'] is List ? j['highlights'] as List : const []))
+          if (h is List && h.length == 2) Highlight('${h[0]}', '${h[1]}'),
+      ],
+    );
+  }
 
   /// Reads the `update` object from the server's config (already known to be newer).
   static AppUpdate? fromServer(Object? j, {String current = kVersionName}) {
@@ -29,6 +91,7 @@ class AppUpdate {
     return AppUpdate(
       version: version,
       notes: cleanNotes('${j['notes'] ?? ''}'),
+      highlights: Highlight.parse('${j['notes'] ?? ''}'),
       downloadUrl: url,
       required: j['required'] == true,
       sizeBytes: j['size'] is int ? j['size'] as int : null,
@@ -50,6 +113,7 @@ class AppUpdate {
     return AppUpdate(
       version: version,
       notes: cleanNotes(body),
+      highlights: Highlight.parse(body),
       downloadUrl: link ?? '$kSourceCodeUrl/releases/latest',
       required: body.toLowerCase().contains('[required]'),
     );
@@ -122,7 +186,11 @@ class UpdateService {
     final now = DateTime.now().millisecondsSinceEpoch;
     if (!manual) {
       final last = prefs.getInt(_checkedKey) ?? 0;
-      if (now - last < const Duration(hours: 6).inMilliseconds) return null;
+      if (now - last < const Duration(hours: 6).inMilliseconds) {
+        // Between checks a required update is still shown every time, from what was saved.
+        final saved = _savedRequired(prefs);
+        return saved != null && AppUpdate.compareVersions(saved.version, kVersionName) > 0 ? saved : null;
+      }
     }
     try {
       final res = await _client
@@ -131,11 +199,28 @@ class UpdateService {
       if (res.statusCode != 200) throw Exception('GitHub returned ${res.statusCode}');
       await prefs.setInt(_checkedKey, now);
       final update = AppUpdate.fromRelease(Map<String, dynamic>.from(jsonDecode(utf8.decode(res.bodyBytes)) as Map));
+      if (update?.required ?? false) {
+        await prefs.setString(_requiredKey, jsonEncode(update!.toJson()));
+      } else {
+        await prefs.remove(_requiredKey);
+      }
       if (update == null) return null;
       if (!manual && !update.required && prefs.getString(_skipKey) == update.version) return null;
       return update;
     } catch (_) {
       if (manual) rethrow;
+      // Offline: a required update seen before still has to be installed.
+      final saved = _savedRequired(prefs);
+      return saved != null && AppUpdate.compareVersions(saved.version, kVersionName) > 0 ? saved : null;
+    }
+  }
+
+  static const _requiredKey = 'update_required';
+
+  AppUpdate? _savedRequired(SharedPreferences prefs) {
+    try {
+      return AppUpdate.fromJson(jsonDecode(prefs.getString(_requiredKey) ?? 'null'));
+    } catch (_) {
       return null;
     }
   }

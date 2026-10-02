@@ -145,7 +145,10 @@ class GradientButton extends StatelessWidget {
   final IconData? icon;
   final VoidCallback? onTap;
   final bool compact;
-  const GradientButton({super.key, required this.label, this.icon, this.onTap, this.compact = false});
+
+  /// Fill the width it is given (centred content), instead of hugging the label.
+  final bool expand;
+  const GradientButton({super.key, required this.label, this.icon, this.onTap, this.compact = false, this.expand = false});
 
   @override
   Widget build(BuildContext context) {
@@ -159,7 +162,7 @@ class GradientButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(30),
           boxShadow: [BoxShadow(color: mood.accent.withValues(alpha: 0.45), blurRadius: 20, offset: const Offset(0, 6))],
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
+        child: Row(mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
           if (icon != null) ...[Icon(icon, size: 20), const SizedBox(width: 8)],
           Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
         ]),

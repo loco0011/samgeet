@@ -11,6 +11,7 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'data/admin_service.dart';
 import 'data/analytics.dart';
 import 'data/api_client.dart';
 import 'data/app_config.dart';
@@ -65,6 +66,7 @@ Future<void> main() async {
   final downloads = DownloadService(prefs, api)..analytics = analytics;
   await downloads.init();
   final config = AppConfig(prefs, server, analytics: analytics);
+  final admin = AdminService(prefs, server);
   final reco = RecommendationService(api, library);
   final player = PlayerController(api: api, library: library, reco: reco, downloads: downloads);
   final mood = MoodController(player, library);
@@ -102,6 +104,7 @@ Future<void> main() async {
     downloads: downloads,
     analytics: analytics,
     config: config,
+    admin: admin,
     androidSdk: sdk,
   ));
 }
@@ -116,6 +119,7 @@ class SamgeetApp extends StatelessWidget {
   final DownloadService downloads;
   final Analytics analytics;
   final AppConfig config;
+  final AdminService admin;
   final int androidSdk;
 
   const SamgeetApp({
@@ -129,6 +133,7 @@ class SamgeetApp extends StatelessWidget {
     required this.downloads,
     required this.analytics,
     required this.config,
+    required this.admin,
     this.androidSdk = 31,
   });
 
@@ -144,6 +149,7 @@ class SamgeetApp extends StatelessWidget {
         ChangeNotifierProvider<SyncService>.value(value: sync),
         ChangeNotifierProvider<DownloadService>.value(value: downloads),
         Provider<Analytics>.value(value: analytics),
+        Provider<AdminService>.value(value: admin),
         ChangeNotifierProvider<AppConfig>.value(value: config),
       ],
       child: MaterialApp(

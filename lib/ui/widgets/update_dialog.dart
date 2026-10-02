@@ -8,13 +8,18 @@ import '../../app_info.dart';
 import '../../data/analytics.dart';
 import '../../data/app_config.dart';
 import '../../data/update_service.dart';
+import '../mood_theme.dart';
 import '../nav.dart';
 import '../theme.dart';
 import 'fancy_dialog.dart';
 
 /// Looks for a newer version and, if there is one, shows the update popup.
 /// [manual] (the About screen's button) also reports "you're up to date". Returns whether the popup showed.
+/// True while the update popup is on screen, so returning to the app doesn't stack a second one.
+bool _updateShowing = false;
+
 Future<bool> checkForUpdate(BuildContext context, {bool manual = false}) async {
+  if (_updateShowing) return true;
   // Updates are APK downloads, which only Android can install.
   if (!Platform.isAndroid) {
     if (manual) toast(context, 'You have version $kVersionName');
@@ -33,7 +38,12 @@ Future<bool> checkForUpdate(BuildContext context, {bool manual = false}) async {
     if (manual) toast(context, 'You have the latest version ($kVersionName)');
     return false;
   }
-  await showUpdateDialog(context, update, service);
+  _updateShowing = true;
+  try {
+    await showUpdateDialog(context, update, service);
+  } finally {
+    _updateShowing = false;
+  }
   return true;
 }
 
@@ -55,28 +65,31 @@ Future<void> showUpdateDialog(BuildContext context, AppUpdate u, UpdateService s
     Builder(
       builder: (ctx) => FancyDialog(
         icon: Icons.rocket_launch_rounded,
-        tone: u.required ? FancyTone.warning : FancyTone.celebrate,
+        tone: FancyTone.celebrate,
         badge: '$kVersionName  →  ${u.version}$size',
-        title: u.required ? 'Update needed to keep listening' : 'A fresh Samgeet is here',
+        title: u.required ? 'Update to keep listening' : 'Samgeet ${u.version} is here',
         body: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(u.required
-              ? 'This version stops working soon. Updating takes a minute, and your playlists, likes and settings stay as they are.'
-              : 'Samgeet ${u.version} is ready to install. Your playlists, likes and settings stay as they are.'),
-          if (u.notes.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: AppColors.surface2, borderRadius: BorderRadius.circular(18)),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text("WHAT'S NEW", style: TextStyle(fontSize: 11, letterSpacing: 1.4, fontWeight: FontWeight.w800, color: AppColors.muted)),
-                const SizedBox(height: 8),
-                Text(u.notes, style: const TextStyle(fontSize: 13.5, height: 1.5)),
-              ]),
+          if (u.highlights.isNotEmpty) ...[
+            HighlightList(highlights: u.highlights.take(6).toList()),
+            const SizedBox(height: 14),
+          ] else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(u.required ? 'This version needs an update to keep working.' : 'A new version is ready to install.'),
             ),
-          ],
-          const SizedBox(height: 12),
-          const Text('Android may ask you to allow installs from your browser the first time.', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+          Row(children: [
+            const Icon(Icons.verified_user_outlined, size: 15, color: AppColors.muted),
+            const SizedBox(width: 6),
+            const Expanded(child: Text('Your playlists, likes and settings stay as they are.', style: TextStyle(color: AppColors.muted, fontSize: 12))),
+            if (u.notes.isNotEmpty)
+              GestureDetector(
+                onTap: () => showUpdateDetails(ctx, u.version, u.notes),
+                child: const Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: Text('All the details', style: TextStyle(color: AppColors.pink, fontWeight: FontWeight.w700, fontSize: 12)),
+                ),
+              ),
+          ]),
         ]),
         primaryLabel: 'Download update',
         primaryIcon: Icons.download_rounded,
@@ -105,6 +118,64 @@ Future<void> showUpdateDialog(BuildContext context, AppUpdate u, UpdateService s
     ),
   );
 }
+
+/// The headlines of an update as icon tiles, one short line each.
+class HighlightList extends StatelessWidget {
+  final List<Highlight> highlights;
+  const HighlightList({super.key, required this.highlights});
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = moodPalette(context).accent;
+    return Column(children: [
+      for (var i = 0; i < highlights.length; i++)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          child: Row(children: [
+            Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: LinearGradient(colors: [accent.withValues(alpha: 0.32), accent.withValues(alpha: 0.12)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: highlights[i].icon.isEmpty
+                  ? Icon(Icons.auto_awesome_rounded, size: 18, color: moodPalette(context).light)
+                  : Text(highlights[i].icon, style: const TextStyle(fontSize: 18)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(highlights[i].title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5, color: Colors.white))),
+          ]),
+        ),
+    ]);
+  }
+}
+
+/// The full release notes, from the popup's "All the details" or the About screen.
+Future<void> showUpdateDetails(BuildContext context, String version, String notes) => showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * 0.8),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(22, 14, 22, 24),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 16),
+              Text('What\'s new in $version', style: const TextStyle(fontFamily: kDisplay, fontSize: 21, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
+              const SizedBox(height: 14),
+              Text(notes, style: const TextStyle(height: 1.6, fontSize: 14, color: Color(0xFFD9D9E6))),
+            ]),
+          ),
+        ),
+      ),
+    );
 
 /// Shows a message sent from the admin panel. [onAction] runs its button's action (opening the
 /// update, a link, or a search); the server hears whether it was opened or dismissed.

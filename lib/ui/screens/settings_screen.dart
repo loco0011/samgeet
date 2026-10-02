@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/admin_service.dart';
 import '../../data/sync_service.dart';
 import '../../data/catalog.dart';
 import '../../data/download_service.dart';
@@ -14,9 +15,11 @@ import '../widgets/profile_avatar.dart';
 import '../widgets/account_widgets.dart';
 import '../widgets/download_widgets.dart';
 import '../widgets/player_style_picker.dart';
+import '../widgets/taste_pickers.dart';
 import '../mood_theme.dart';
 import '../../app_info.dart';
 import 'about_screen.dart';
+import 'admin_screen.dart';
 import 'sign_in_screen.dart';
 import '../theme.dart';
 
@@ -98,7 +101,7 @@ class SettingsScreen extends StatelessWidget {
                 : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const Text('You\'re browsing as a guest', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
                     const SizedBox(height: 6),
-                    Text('Sign in to share playlists and keep more than ${LibraryStore.guestPlaylistLimit} songs in a playlist.', style: const TextStyle(color: AppColors.muted, height: 1.4)),
+                    Text('Sign in to like, download and share songs, pick your player look, and keep your library on every phone.', style: const TextStyle(color: AppColors.muted, height: 1.4)),
                     const SizedBox(height: 14),
                     GradientButton(label: 'Sign in', icon: Icons.login_rounded, compact: true, onTap: () => pushPage(context, const SignInScreen())),
                   ]),
@@ -234,21 +237,57 @@ class SettingsScreen extends StatelessWidget {
           subtitle: const Text('When your queue ends, keep playing songs that match the mood', style: TextStyle(color: AppColors.muted)),
           onChanged: lib.setAutoplay,
         ),
-        section('Home languages'),
+        section('Your choices'),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final e in Catalog.languageChoices.entries)
-              GlassChip(
-                label: e.value,
-                selected: lib.languages.contains(e.key),
-                onTap: () {
+          child: GlassBox(
+            radius: 22,
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const _ChoiceHeading('Languages you love', 'Sets what shows on your home page'),
+              ChoiceChips(
+                choices: Catalog.languageChoices,
+                selected: lib.languages.toSet(),
+                onToggle: (k) {
                   final next = [...lib.languages];
-                  lib.languages.contains(e.key) ? next.remove(e.key) : next.add(e.key);
+                  lib.languages.contains(k) ? next.remove(k) : next.add(k);
                   lib.setLanguages(next);
                 },
               ),
-          ]),
+              if (lib.signedIn) ...[
+                const _ChoiceHeading('Moods you like', 'These come first in your suggestions'),
+                ChoiceChips(
+                  choices: kMoodChoices,
+                  selected: lib.profile!.moods.toSet(),
+                  onToggle: (k) {
+                    final next = [...lib.profile!.moods];
+                    next.contains(k) ? next.remove(k) : next.add(k);
+                    lib.updateChoices(moods: next);
+                  },
+                ),
+                _ChoiceHeading('Favourite singers', lib.profile!.artists.isEmpty ? 'Pick a few and your Daily Mix starts with them' : '${plural(lib.profile!.artists.length, 'singer')} picked'),
+                SingerPicker(
+                  selected: lib.profile!.artists.toSet(),
+                  onToggle: (name) {
+                    final next = [...lib.profile!.artists];
+                    next.contains(name) ? next.remove(name) : next.add(name);
+                    lib.updateChoices(artists: next);
+                  },
+                ),
+              ] else ...[
+                const SizedBox(height: 14),
+                Pressable(
+                  onTap: () => requireSignIn(context, reason: 'Sign in to save your moods and favourite singers.'),
+                  child: const Row(children: [
+                    Icon(Icons.lock_outline_rounded, size: 16, color: AppColors.muted),
+                    SizedBox(width: 8),
+                    Expanded(child: Text('Sign in to pick moods and favourite singers', style: TextStyle(color: AppColors.muted, fontWeight: FontWeight.w600))),
+                    Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+                  ]),
+                ),
+              ],
+            ]),
+          ),
         ),
         section('Your taste'),
         Padding(
@@ -318,13 +357,15 @@ class SettingsScreen extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
           onTap: () => pushPage(context, const AboutScreen()),
         ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(20, 4, 20, 0),
-          child: Text(
-            '$kCopyright · Version $kAppVersion',
-            style: TextStyle(color: AppColors.muted, fontSize: 12),
+        if (context.read<AdminService>().signedIn)
+          ListTile(
+            leading: const Icon(Icons.campaign_outlined),
+            title: const Text('Send a message to listeners', style: TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: const Text('Admin', style: TextStyle(color: AppColors.muted)),
+            trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+            onTap: () => pushPage(context, const AdminScreen()),
           ),
-        ),
+        const _VersionLine(),
       ]),
     );
   }
@@ -398,4 +439,55 @@ class _AccentSwatch extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The copyright and version line. Tapping it 7 times opens the admin tools (they still need the
+/// admin password).
+class _VersionLine extends StatefulWidget {
+  const _VersionLine();
+
+  @override
+  State<_VersionLine> createState() => _VersionLineState();
+}
+
+class _VersionLineState extends State<_VersionLine> {
+  int _taps = 0;
+  DateTime _last = DateTime(0);
+
+  void _tap() {
+    final now = DateTime.now();
+    _taps = now.difference(_last) < const Duration(seconds: 1) ? _taps + 1 : 1;
+    _last = now;
+    if (_taps >= 7) {
+      _taps = 0;
+      pushPage(context, const AdminScreen());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _tap,
+        child: const Padding(
+          padding: EdgeInsets.fromLTRB(20, 4, 20, 8),
+          child: Text('$kCopyright · Version $kAppVersion', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+        ),
+      );
+}
+
+/// A small heading inside the Your choices card.
+class _ChoiceHeading extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  const _ChoiceHeading(this.title, this.subtitle);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 14, bottom: 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontFamily: kDisplay, fontWeight: FontWeight.w800, fontSize: 15)),
+          const SizedBox(height: 2),
+          Text(subtitle, style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+        ]),
+      );
 }

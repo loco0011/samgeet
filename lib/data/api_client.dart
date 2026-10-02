@@ -71,7 +71,8 @@ class ApiClient {
       Hmac(sha256, utf8.encode(key)).convert(utf8.encode('$endpoint\n$time\n$device\n${sha256.convert(utf8.encode(body))}')).toString();
 
   /// POSTs [body] to `<endpoint>.php`. Null when offline, switched off, or the answer wasn't JSON.
-  Future<ApiResponse?> post(String endpoint, Map<String, dynamic> body, {Duration timeout = const Duration(seconds: 20)}) async {
+  Future<ApiResponse?> post(String endpoint, Map<String, dynamic> body,
+      {Duration timeout = const Duration(seconds: 20), Map<String, String> headers = const {}}) async {
     if (!configured) return null;
     for (var attempt = 0; attempt < 2; attempt++) {
       final text = jsonEncode(body);
@@ -89,6 +90,7 @@ class ApiClient {
                 'X-Samgeet-Time': time,
                 'X-Samgeet-Sign': sign(_appKey, endpoint, time, device, text),
                 'X-Samgeet-Session': ?token,
+                ...headers,
               },
               body: text,
             )
