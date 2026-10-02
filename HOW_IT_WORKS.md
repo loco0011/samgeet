@@ -78,28 +78,38 @@ Key points:
 3. **Quality.** The URL's `_96` / `_160` / `_320` suffix is swapped to match the Settings
    choice (Data saver / Balanced / High quality). 320 kbps is only used if the song's
    `320kbps` flag is true.
-4. **Playback.** `just_audio` streams the URL. Nothing is downloaded or saved to disk. The
-   track is buffered as you play it, and only the song's metadata and encrypted link are stored
-   locally.
-5. **Equalizer.** The player runs through Android's built-in `Equalizer` and `LoudnessEnhancer` effects (`lib/player/audio_fx.dart`). Presets, band gains and the boost are saved on the device.
-6. **"Smart radio" / autoplay.** When the queue runs low, `RecommendationService` asks
+4. **Playback.** `just_audio` streams the URL. The track is buffered as you play it, and only
+   the song's metadata and encrypted link are stored locally, unless you download it.
+5. **Downloads (offline).** A song you download is fetched from the same stream URL (the same
+   AAC-in-MP4 file, at the Download quality in Settings, up to 320 kbps) and saved with its cover
+   in the app's private storage, in Android's `no_backup` folder (`lib/data/download_service.dart`).
+   Other apps can't read those files, they are not copied into the phone's cloud backup, and
+   uninstalling the app deletes them. The player plays a downloaded song from its file, online or
+   offline. The list of downloads stays on the phone and is not synced.
+6. **Equalizer.** The player runs through Android's built-in `Equalizer` and `LoudnessEnhancer` effects (`lib/player/audio_fx.dart`). Presets, band gains and the boost are saved on the device (and sync with an account). Listeners can save their own named sounds (the band curve plus the boost); they sync too.
+7. **New releases.** `SaavnApi.newReleases` reads the catalogue's release feed
+   (`content.getAlbums`, cached for 5 minutes) for the listener's languages, sorted by release
+   date. For languages the feed doesn't cover (Korean, Spanish, Japanese...), `latestSongs`
+   searches for this year's songs and keeps only those in that language.
+8. **"Smart radio" / autoplay.** When the queue runs low, `RecommendationService` asks
    JioSaavn's radio endpoint for similar songs and also runs extra searches (same artist, your
    favourite artists, the category you started from). `Recommender` then ranks those candidates
    on-device using your taste profile and the inferred mood. There is no ML on the audio and no
    server of your own. The mood is guessed from title, album and era keywords (see
    `lib/engine/mood.dart`).
-7. **Your data.** Profile, favourites, playlists, history and taste weights are saved as JSON in
+9. **Your data.** Profile, favourites, playlists, history and taste weights are saved as JSON in
    `SharedPreferences` on the device. Guests' data never leaves the phone. (Note that JioSaavn
    still sees every request you make: your IP, the songs you search and play, and the spoofed
    User-Agent.)
-8. **Sign in and sync.** Signing in takes an email and a password. The phone turns them into an
-   account key (PBKDF2, 150,000 rounds, salted with the email) and syncs the whole library with
-   `backend/api/backup.php` under that key; the server keeps only a hash of it, so the password
+10. **Sign in and sync.** Signing in takes an email and a password. The phone turns them into an
+   account key (PBKDF2, 150,000 rounds, salted with the email), signs in with it to get a session,
+   and syncs the whole library with `backend/samgeet/api/library.php` (signed requests, see
+   `backend/README.md`); the server keeps only a hash of it, so the password
    can't be reset. An existing account's library comes back to the phone; a new one starts from
    the phone's library. Syncing is a three-way merge (lists merge item by item, deletions
    included) and every save names the revision it built on, so two phones never overwrite each
    other. Signing out only stops syncing on that phone.
-9. **Sharing.** A shared song or playlist becomes a short link (`https://api.sambitmaity.fun/s/<code>`,
+11. **Sharing.** A shared song or playlist becomes a short link (`https://api.sambitmaity.fun/s/<code>`,
    `backend/api/link.php`) whose details are stored on the server. It opens the app directly
    (Android App Links) or a landing page with a download button.
 
@@ -125,12 +135,28 @@ Key points:
 
 ### Technical / product limitations
 
-- **No offline mode.** Nothing is cached to disk, so there is no download-and-listen. This is
-  also partly why it is a bit safer legally than a downloader (see below).
+- **Downloads raise the legal risk.** Earlier versions saved nothing to disk, which was part of
+  why the app was a bit safer legally than a downloader. Downloads keep a copy of each
+  song on the phone. The files are private to the app and are not exported, but storing copies
+  is still reproduction, and it makes the app closer to the "Saavn downloader" tools mentioned
+  above (see 4.4).
+- **Downloads can go stale.** A downloaded song keeps playing even if the catalogue removes it,
+  but its details (and a fresh stream, if the file is damaged) come from the catalogue.
 - **Accounts are password-only.** There is no email verification and no password reset: a
   forgotten password means a lost library, and anyone can check whether an email has an account
-  (that is how sign-in says "wrong password"). There is no in-app way yet to delete an account's
-  library from the server. Guests are limited to 5 songs per playlist by design.
+  (that is how sign-in says "wrong password"). Settings › Delete my account removes an account and
+  its data from the server. Guests are limited to 5 songs per playlist, and liking, downloading and
+  sharing need an account.
+- Listening data: from 1.4.0 the app reports plays, skips, likes, downloads, shares, searches and
+  device details to Samgeet's server (`backend/samgeet/api/events.php`), linked to the account
+  when signed in. It is disclosed on the sign-in page, the About screen and in `NOTICE.md`. Under
+  India's DPDP Act and similar laws this is personal data: keep it secure, use it only as
+  described, and honour deletion requests.
+- The API signing key ships inside the APK. It stops casual scripts and scanners, but anyone
+  determined can extract it from the app; real protection comes from the per-account sessions and
+  the rate limits, not from the key or the private path.
+- Messages reach phones only when the app opens or while it is running (checked every 30
+  minutes). There is no push service, so a phone with the app closed sees them on next open.
 - **Security of the design.** The hard-coded DES key is not a secret. DES-ECB is weak
   encryption and was never meant to protect anything from you, only to stop casual scraping.
 - **Privacy is only partial.** JioSaavn receives your requests (IP address, search terms, play
@@ -183,9 +209,10 @@ the author appears to be there. Similar ideas apply in most places.
 
 ### 4.4 Common defences, and why they are weaker than they sound
 
-- **"It only streams, it doesn't download or store."** This helps less than people think.
-  Streaming still involves communicating and reproducing the work, and doesn't fix the terms
-  of use or the circumvention problem.
+- **"It only streams, it doesn't download or store."** Samgeet can no longer say this: it now
+  saves downloaded songs on the phone. Even for streaming alone the argument helps less
+  than people think: streaming still involves communicating and reproducing the work, and
+  doesn't fix the terms of use or the circumvention problem.
 - **"I don't host any files."** True and useful, and it lowers the risk compared with a site
   that hosts the music, but it does not create a licence.
 - **"It's open source and non-commercial."** Non-commercial helps a bit with damages and
@@ -237,8 +264,8 @@ If you want to keep the app and ship it safely, these are the real options:
 | Question | Answer |
 |---|---|
 | Where does the music come from? | JioSaavn's servers, through its unofficial web API. Nothing is hosted by the app. |
-| How does it play? | Fetch metadata → get an encrypted stream URL → decrypt it on-device with a hard-coded DES key → stream it with `just_audio`. |
-| Where is my data? | On your phone (`SharedPreferences`), plus your account on Samgeet's server if you sign in. JioSaavn still sees your requests. |
+| How does it play? | Fetch metadata → get an encrypted stream URL → decrypt it on-device with a hard-coded DES key → stream it with `just_audio` (or play the saved file, for a downloaded song). |
+| Where is my data? | On your phone (`SharedPreferences`, and downloaded songs in the app's private storage), plus your account on Samgeet's server if you sign in. JioSaavn still sees your requests. |
 | Biggest technical drawback? | Depends on an undocumented API that can change or block you at any time. |
 | Is the code legal? | Yes. It is MIT-licensed original work. |
 | Is the streaming legal? | Very likely **not authorised** (terms of use, licensing, possible circumvention of protection, ad-free access). |

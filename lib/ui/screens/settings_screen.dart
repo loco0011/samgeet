@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/sync_service.dart';
 import '../../data/catalog.dart';
+import '../../data/download_service.dart';
 import '../../data/library_store.dart';
 import '../../data/track.dart';
 import '../../player/player_controller.dart';
@@ -11,6 +12,8 @@ import '../widgets/common.dart';
 import '../widgets/glass.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/account_widgets.dart';
+import '../widgets/download_widgets.dart';
+import '../widgets/player_style_picker.dart';
 import '../mood_theme.dart';
 import '../../app_info.dart';
 import 'about_screen.dart';
@@ -175,7 +178,55 @@ class SettingsScreen extends StatelessWidget {
               ),
           ]),
         ),
+        section('Downloads'),
+        Builder(builder: (context) {
+          final dl = context.watch<DownloadService>();
+          return Column(children: [
+            RadioGroup<AudioQuality>(
+              groupValue: dl.quality,
+              onChanged: (v) {
+                if (v != null) dl.setQuality(v);
+              },
+              child: Column(children: [
+                for (final q in AudioQuality.values)
+                  RadioListTile<AudioQuality>(
+                    value: q,
+                    activeColor: AppColors.pink,
+                    title: Text(q.label, style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(
+                      switch (q) {
+                        AudioQuality.high => '${q.detail} · best sound, about 9 MB for a 4-minute song',
+                        AudioQuality.medium => '${q.detail} · about 5 MB for a 4-minute song',
+                        AudioQuality.low => '${q.detail} · about 3 MB for a 4-minute song',
+                      },
+                      style: const TextStyle(color: AppColors.muted),
+                    ),
+                  ),
+              ]),
+            ),
+            ListTile(
+              leading: const Icon(Icons.sd_storage_outlined),
+              title: Text('${plural(dl.count, 'song')} saved · ${DownloadService.size(dl.totalBytes)}', style: const TextStyle(fontWeight: FontWeight.w700)),
+              subtitle: const Text('Kept privately inside Samgeet on this phone. They play without internet.', style: TextStyle(color: AppColors.muted)),
+              trailing: dl.count == 0 ? null : TextButton(onPressed: () => confirmRemoveAllDownloads(context), child: const Text('Remove all', style: TextStyle(color: Colors.redAccent))),
+            ),
+          ]);
+        }),
         section('Playback'),
+        ListTile(
+          leading: SizedBox(
+            width: 34,
+            height: 44,
+            child: ClipRRect(borderRadius: BorderRadius.circular(7), child: StylePreview(style: lib.hasAccount ? lib.playerStyle : PlayerStyle.disc, accent: moodPalette(context).accent)),
+          ),
+          title: const Text('Player look', style: TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: Text(
+            lib.hasAccount ? '${lib.playerStyle.label} · ${lib.playerStyle.description}' : 'Sign in to choose Disc, Cover, Immersive or Minimal',
+            style: const TextStyle(color: AppColors.muted),
+          ),
+          trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+          onTap: () => showPlayerStylePicker(context),
+        ),
         SwitchListTile(
           value: lib.autoplay,
           activeThumbColor: AppColors.pink,
@@ -252,6 +303,13 @@ class SettingsScreen extends StatelessWidget {
             toast(context, 'Searches cleared');
           },
         ),
+        if (lib.hasAccount && lib.sync != null)
+          ListTile(
+            leading: const Icon(Icons.delete_forever_outlined, color: Colors.redAccent),
+            title: const Text('Delete my account', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700)),
+            subtitle: const Text('Removes your account, synced library and listening data from Samgeet\'s server', style: TextStyle(color: AppColors.muted)),
+            onTap: () => _deleteAccount(context, lib),
+          ),
         section('About'),
         ListTile(
           leading: Image.asset('assets/mark-chrome.webp', height: 40),
@@ -269,6 +327,31 @@ class SettingsScreen extends StatelessWidget {
         ),
       ]),
     );
+  }
+
+  Future<void> _deleteAccount(BuildContext context, LibraryStore lib) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete your account?'),
+        content: const Text(
+            'Your account, the synced copy of your library and everything Samgeet recorded about your listening are removed from the server. '
+            'Playlists and likes stay on this phone, and you are signed out. This can\'t be undone.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.redAccent), onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    final done = await lib.sync!.deleteAccount();
+    if (!context.mounted) return;
+    if (!done) {
+      toast(context, 'Couldn\'t reach Samgeet\'s server. Try again when you\'re online.');
+      return;
+    }
+    await lib.signOut();
+    if (context.mounted) toast(context, 'Account deleted');
   }
 
   Widget _row(String k, String v) => Padding(

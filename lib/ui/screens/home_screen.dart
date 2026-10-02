@@ -1,9 +1,13 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 
 import '../../app_info.dart';
 import '../../data/catalog.dart';
+import '../../data/download_service.dart';
 import '../../data/library_store.dart';
 import '../../data/profile.dart';
 import '../../data/saavn_api.dart';
@@ -18,6 +22,7 @@ import '../widgets/profile_avatar.dart';
 import '../mood_theme.dart';
 import '../widgets/shelves.dart';
 import '../widgets/track_widgets.dart';
+import 'new_releases_screen.dart';
 import 'settings_screen.dart';
 import 'sign_in_screen.dart';
 
@@ -31,21 +36,42 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Future<HomeData> _home;
   late Future<List<Track>> _mix;
+  late Future<List<MediaCard>> _releases;
   String _langKey = '';
   int? _profileKey;
+  DateTime _loadedAt = DateTime(0);
+  AppLifecycleListener? _lifecycle;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // Back in the app after a while: fetch what came out meanwhile.
+    _lifecycle = AppLifecycleListener(onResume: () {
+      if (mounted && DateTime.now().difference(_loadedAt) > const Duration(minutes: 10)) setState(_load);
+    });
+  }
+
+  @override
+  void dispose() {
+    _lifecycle?.dispose();
+    super.dispose();
   }
 
   void _load() {
     final lib = context.read<LibraryStore>();
+    final api = context.read<SaavnApi>();
+    _loadedAt = DateTime.now();
     _langKey = lib.languages.join(',');
     _profileKey = lib.profile?.createdAt;
-    _home = context.read<SaavnApi>().home(lib.languages);
-    _mix = context.read<RecommendationService>().madeForYou().catchError((_) => <Track>[]);
+    _home = api.home(lib.languages);
+    _releases = api.newReleases(lib.languages, n: 24).catchError((_) => <MediaCard>[]);
+    _mix = context.read<RecommendationService>().dailyMix().catchError((_) => <Track>[]);
+  }
+
+  /// A different mix for today, on request.
+  void _newMix() {
+    setState(() => _mix = context.read<RecommendationService>().dailyMix(force: true).catchError((_) => <Track>[]));
   }
 
   Future<void> _refresh() async {
@@ -88,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 builder: (context, snap) {
                   final mix = snap.data ?? const <Track>[];
                   if (mix.isEmpty) return const SizedBox.shrink();
-                  return _MadeForYou(mix: mix, taste: lib);
+                  return _MadeForYou(mix: mix, taste: lib, onNewMix: _newMix);
                 },
               ),
             ),
@@ -101,13 +127,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 future: _home,
                 builder: (context, snap) {
                   if (snap.hasError) {
+                    final saved = context.read<DownloadService>().songs;
                     return Padding(
                       padding: const EdgeInsets.only(top: 40),
                       child: EmptyState(
                         icon: Icons.wifi_off_rounded,
                         title: 'No connection',
-                        message: 'Connect to the internet to see what\'s trending.',
-                        action: GradientButton(label: 'Retry', icon: Icons.refresh_rounded, compact: true, onTap: () => setState(_load)),
+                        message: saved.isEmpty
+                            ? 'Connect to the internet to see what\'s trending.'
+                            : 'You\'re offline, but your ${plural(saved.length, 'downloaded song')} still play.',
+                        action: Wrap(spacing: 10, runSpacing: 10, alignment: WrapAlignment.center, children: [
+                          if (saved.isNotEmpty)
+                            GradientButton(
+                              label: 'Play downloads',
+                              icon: Icons.download_done_rounded,
+                              compact: true,
+                              onTap: () => context.read<PlayerController>().playTracks(saved, context: 'downloads', shuffleOn: true),
+                            ),
+                          OutlinedButton.icon(onPressed: () => setState(_load), icon: const Icon(Icons.refresh_rounded), label: const Text('Retry')),
+                        ]),
                       ),
                     );
                   }
@@ -118,10 +156,22 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SectionHeader('Trending now', subtitle: 'What everyone is playing'),
                       HeroCarousel(cards: d.trending, onTap: (c) => openCard(context, c)),
                     ],
-                    if (d.newAlbums.isNotEmpty) ...[
-                      const SectionHeader('New releases'),
-                      PosterGrid(cards: d.newAlbums.take(6).toList(), onTap: (c) => openCard(context, c)),
-                    ],
+                    FutureBuilder<List<MediaCard>>(
+                      future: _releases,
+                      builder: (context, rel) {
+                        // The live release feed; the launch data's picks if that failed.
+                        final cards = (rel.data?.isNotEmpty ?? false) ? rel.data! : d.newAlbums;
+                        if (cards.isEmpty) return const SizedBox.shrink();
+                        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          SectionHeader(
+                            'New releases',
+                            subtitle: 'Just out in your languages',
+                            trailing: TextButton(onPressed: () => pushPage(context, const NewReleasesScreen()), child: const Text('See all')),
+                          ),
+                          PosterGrid(cards: cards.take(6).toList(), onTap: (c) => openCard(context, c)),
+                        ]);
+                      },
+                    ),
                     if (d.charts.isNotEmpty) ...[
                       const SectionHeader('Charts', subtitle: 'Top of the pops, updated daily'),
                       CardShelf(cards: d.charts, onTap: (c) => openCard(context, c)),
@@ -140,6 +190,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                     const SectionHeader('Moods', subtitle: 'Music for how you feel'),
                     CategoryStrip(items: Catalog.groups.first.items, onTap: (c) => openCategory(context, c)),
+                    const SectionHeader('Indian classical', subtitle: 'Ragas, masters and timeless forms'),
+                    CategoryStrip(items: const [Catalog.ragas, Catalog.hindustaniVocal, Catalog.sitar, Catalog.bansuri, Catalog.santoor, Catalog.carnaticVocal, Catalog.veena, Catalog.thumri], onTap: (c) => openCategory(context, c)),
+                    const SectionHeader('K-Pop & the world', subtitle: 'Seoul, Madrid, Tokyo and beyond'),
+                    CategoryStrip(items: const [Catalog.kpop, Catalog.kdrama, Catalog.kgirls, Catalog.kboys, Catalog.spanish, Catalog.jpop, Catalog.french, Catalog.arabic, Catalog.afro], onTap: (c) => openCategory(context, c)),
                   ]);
                 },
               ),
@@ -281,13 +335,18 @@ class _QuickPicks extends StatelessWidget {
 class _MadeForYou extends StatelessWidget {
   final List<Track> mix;
   final LibraryStore taste;
-  const _MadeForYou({required this.mix, required this.taste});
+  final VoidCallback onNewMix;
+  const _MadeForYou({required this.mix, required this.taste, required this.onNewMix});
 
   @override
   Widget build(BuildContext context) {
     final top = taste.taste.topArtists(n: 3).map((a) => a.name).toList();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const SectionHeader('Made for you', subtitle: 'Tuned to what you\'ve been loving'),
+      SectionHeader(
+        'Made for you',
+        subtitle: 'A fresh mix every day, tuned to what you\'ve been loving',
+        trailing: TextButton.icon(onPressed: onNewMix, icon: const Icon(Icons.refresh_rounded, size: 18), label: const Text('New mix')),
+      ),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Pressable(
@@ -304,7 +363,7 @@ class _MadeForYou extends StatelessWidget {
                 width: 96,
                 height: 96,
                 child: Stack(children: [
-                  for (var i = 2; i >= 0; i--)
+                  for (var i = math.min(2, mix.length - 1); i >= 0; i--)
                     Positioned(
                       left: i * 14.0,
                       top: i * 3.0,
@@ -318,7 +377,7 @@ class _MadeForYou extends StatelessWidget {
                   const Text('Your Daily Mix', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
                   const SizedBox(height: 4),
                   Text(
-                    top.isEmpty ? '${mix.length} songs picked for you' : 'With ${top.join(', ')} & more',
+                    top.isEmpty ? '${mix.length} songs picked for you today' : 'With ${top.join(', ')} & more · ${mix.length} songs',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 13),

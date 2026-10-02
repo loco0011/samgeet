@@ -20,6 +20,16 @@ class Category {
   /// Hand-picked songs (search phrases) shown first, before the search results.
   final List<String> picks;
 
+  /// More song searches (singers, sub-styles) mixed into the list to widen it.
+  final List<String> moreQueries;
+
+  /// Keep only songs in [language]. For styles whose search words also match
+  /// titles in other languages (an English "Ballad" next to a Korean ballad).
+  final bool strictLanguage;
+
+  /// Whether to look for curated playlists (off where that search finds junk).
+  final bool playlists;
+
   const Category({
     required this.id,
     required this.title,
@@ -30,7 +40,13 @@ class Category {
     this.songQuery,
     this.language = 'hindi',
     this.picks = const [],
+    this.moreQueries = const [],
+    this.strictLanguage = false,
+    this.playlists = true,
   });
+
+  /// Every song search this tile runs, main one first.
+  List<String> get songQueries => [songQuery ?? query, ...moreQueries];
 }
 
 class CatalogGroup {
@@ -168,6 +184,104 @@ class Catalog {
       id: 'sufi', title: 'Sufi & Qawwali', subtitle: 'Soulful', query: 'sufi qawwali', songQuery: 'sufi songs', icon: Icons.auto_awesome_rounded, colors: [Color(0xFF3D7EAA), Color(0xFFFFE47A)]);
   static const instrumental = Category(
       id: 'instrumental', title: 'Instrumental', subtitle: 'Sitar • Flute • Santoor', query: 'instrumental', songQuery: 'sitar flute instrumental', icon: Icons.music_note_outlined, colors: [Color(0xFF16A085), Color(0xFFF4D03F)]);
+  static const hindustaniVocal = Category(
+      id: 'hindustani_vocal', title: 'Khayal vocal', subtitle: 'Bhimsen Joshi • Kishori Amonkar', query: 'hindustani classical', songQuery: 'hindustani classical vocal raga',
+      moreQueries: ['bhimsen joshi raga', 'kishori amonkar', 'pandit jasraj', 'kumar gandharva', 'rashid khan raga'], icon: Icons.record_voice_over_rounded, colors: [Color(0xFF4B134F), Color(0xFFC94B4B)]);
+  static const sitar = Category(
+      id: 'sitar', title: 'Sitar', subtitle: 'Ravi Shankar • Vilayat Khan', query: 'classical instrumental', songQuery: 'sitar ravi shankar', playlists: false,
+      moreQueries: ['sitar raga', 'vilayat khan sitar', 'anoushka shankar', 'nikhil banerjee sitar'], icon: Icons.music_note_rounded, colors: [Color(0xFFB06AB3), Color(0xFF4568DC)]);
+  static const bansuri = Category(
+      id: 'bansuri', title: 'Bansuri', subtitle: 'Hariprasad Chaurasia', query: 'flute instrumental', songQuery: 'hariprasad chaurasia flute',
+      moreQueries: ['bansuri raga', 'flute raga', 'ronu majumdar flute', 'rakesh chaurasia flute'], icon: Icons.air_rounded, colors: [Color(0xFF1FA2FF), Color(0xFF12D8FA)]);
+  static const santoor = Category(
+      id: 'santoor', title: 'Santoor & Sarod', subtitle: 'Shivkumar Sharma • Amjad Ali Khan', query: 'classical instrumental', songQuery: 'santoor shivkumar sharma', playlists: false,
+      moreQueries: ['sarod amjad ali khan', 'santoor raga', 'sarod raga', 'rahul sharma santoor'], icon: Icons.grid_on_rounded, colors: [Color(0xFF0B486B), Color(0xFFF56217)]);
+  static const shehnai = Category(
+      id: 'shehnai', title: 'Shehnai & Tabla', subtitle: 'Bismillah Khan • Zakir Hussain', query: 'classical instrumental', songQuery: 'bismillah khan shehnai', playlists: false,
+      moreQueries: ['tabla solo', 'zakir hussain tabla', 'shehnai raga', 'tabla teental'], icon: Icons.graphic_eq_rounded, colors: [Color(0xFF8E0E00), Color(0xFF1F1C18)]);
+  static const thumri = Category(
+      id: 'thumri', title: 'Thumri & Dadra', subtitle: 'Semi-classical', query: 'thumri', songQuery: 'thumri', playlists: false,
+      moreQueries: ['dadra', 'girija devi thumri', 'begum akhtar', 'shobha gurtu'], icon: Icons.spa_outlined, colors: [Color(0xFFDD5E89), Color(0xFFF7BB97)]);
+  static const dhrupad = Category(
+      id: 'dhrupad', title: 'Dhrupad', subtitle: 'The oldest form', query: 'dhrupad', songQuery: 'dhrupad', playlists: false,
+      moreQueries: ['gundecha brothers dhrupad', 'dagar dhrupad'], icon: Icons.account_balance_rounded, colors: [Color(0xFF3E5151), Color(0xFFDECBA4)]);
+  static const ragas = Category(
+      id: 'ragas', title: 'Ragas by the hour', subtitle: 'Morning • Evening • Night', query: 'morning ragas', songQuery: 'morning raga',
+      moreQueries: ['raga bhairav', 'raga yaman', 'raga darbari', 'raga ahir bhairav', 'raga malkauns'], icon: Icons.wb_twilight_rounded, colors: [Color(0xFFF2994A), Color(0xFF6A3093)]);
+  static const carnaticVocal = Category(
+      id: 'carnatic_vocal', title: 'Carnatic vocal', subtitle: 'M.S. Subbulakshmi • Balamurali', query: 'carnatic vocal', songQuery: 'carnatic vocal', language: 'tamil',
+      moreQueries: ['m s subbulakshmi', 'balamuralikrishna', 'bombay jayashri', 'sudha raghunathan', 'tm krishna'], icon: Icons.record_voice_over_rounded, colors: [Color(0xFF0F9B0F), Color(0xFFF7B733)]);
+  static const veena = Category(
+      id: 'veena', title: 'Veena & Violin', subtitle: 'South Indian strings', query: 'veena', songQuery: 'veena carnatic',
+      moreQueries: ['carnatic violin', 'veena instrumental', 'mandolin srinivas', 'chitti babu veena'], icon: Icons.music_note_rounded, colors: [Color(0xFF136A8A), Color(0xFF267871)]);
+  static const mantras = Category(
+      id: 'mantras', title: 'Mantras & Stotras', subtitle: 'Sanskrit chants', query: 'mantra', songQuery: 'sanskrit mantra', language: 'sanskrit',
+      moreQueries: ['sanskrit stotram', 'vedic chants'], icon: Icons.self_improvement_rounded, colors: [Color(0xFFFF8008), Color(0xFFFFC837)]);
+
+  // ---- Korean ----
+  static const kdrama = Category(
+      id: 'kdrama', title: 'K-Drama OST', subtitle: 'Songs from the shows', query: 'k-pop', songQuery: 'korean drama ost', language: 'korean', strictLanguage: true, playlists: false,
+      moreQueries: ['ost korean', 'drama ost korean'], icon: Icons.live_tv_rounded, colors: [Color(0xFFFFAFBD), Color(0xFFC9FFBF)]);
+  static const kballad = Category(
+      id: 'kballad', title: 'K-Ballad', subtitle: 'Slow & emotional', query: 'k-pop', songQuery: 'korean ballad', language: 'korean', strictLanguage: true, playlists: false,
+      moreQueries: ['korean love songs', 'korean sad songs'], icon: Icons.favorite_rounded, colors: [Color(0xFF834D9B), Color(0xFFD04ED6)]);
+  static const khiphop = Category(
+      id: 'khiphop', title: 'K-Hip-Hop', subtitle: 'Seoul rap', query: 'k-pop', songQuery: 'korean hip hop', language: 'korean', strictLanguage: true, playlists: false,
+      moreQueries: ['korean rap', 'jay park', 'epik high'], icon: Icons.mic_rounded, colors: [Color(0xFF000000), Color(0xFFE74C3C)]);
+  static const krnb = Category(
+      id: 'krnb', title: 'K-R&B & Indie', subtitle: 'Smooth and mellow', query: 'k-pop', songQuery: 'korean r&b', language: 'korean', strictLanguage: true, playlists: false,
+      moreQueries: ['korean indie', 'korean acoustic'], icon: Icons.nightlife_rounded, colors: [Color(0xFF654EA3), Color(0xFFEAAFC8)]);
+  static const kgirls = Category(
+      id: 'kgirls', title: 'Girl groups', subtitle: 'BLACKPINK • aespa • NewJeans', query: 'k-pop', songQuery: 'BLACKPINK', language: 'korean', strictLanguage: true,
+      moreQueries: ['aespa', 'NewJeans', 'LE SSERAFIM', 'ITZY', 'IVE korean'], icon: Icons.star_rounded, colors: [Color(0xFFFF6A88), Color(0xFFFF99AC)]);
+  static const kboys = Category(
+      id: 'kboys', title: 'Boy groups', subtitle: 'BTS • Stray Kids • SEVENTEEN', query: 'k-pop', songQuery: 'BTS', language: 'korean', strictLanguage: true,
+      moreQueries: ['Stray Kids', 'Jimin', 'Jung Kook', 'SEVENTEEN korean', 'ATEEZ korean'], icon: Icons.groups_rounded, colors: [Color(0xFF4776E6), Color(0xFF8E54E9)]);
+  static const trot = Category(
+      id: 'trot', title: 'Trot', subtitle: 'Classic Korean pop', query: 'k-pop', songQuery: 'trot korean', language: 'korean', strictLanguage: true, playlists: false,
+      icon: Icons.radio_rounded, colors: [Color(0xFFF7971E), Color(0xFFE44D26)]);
+
+  // ---- More Indian languages ----
+  static const urdu = Category(
+      id: 'urdu', title: 'Urdu', subtitle: 'اردو', query: 'urdu', songQuery: 'urdu songs', language: 'urdu', strictLanguage: true, icon: Icons.music_note_rounded, colors: [Color(0xFF134E5E), Color(0xFF71B280)]);
+  static const rajasthani = Category(
+      id: 'rajasthani', title: 'Rajasthani', subtitle: 'राजस्थानी', query: 'rajasthani', songQuery: 'rajasthani songs', language: 'rajasthani', strictLanguage: true, icon: Icons.music_note_rounded, colors: [Color(0xFFF09819), Color(0xFFEDDE5D)]);
+  static const nepali = Category(
+      id: 'nepali', title: 'Nepali', subtitle: 'नेपाली', query: 'nepali', songQuery: 'nepali songs', language: 'nepali', strictLanguage: true, icon: Icons.music_note_rounded, colors: [Color(0xFFC31432), Color(0xFF240B36)]);
+  static const garhwali = Category(
+      id: 'garhwali', title: 'Pahadi', subtitle: 'Garhwali • Kumaoni • Himachali', query: 'pahadi', songQuery: 'garhwali songs', playlists: false,
+      moreQueries: ['kumaoni songs', 'himachali songs'], icon: Icons.terrain_rounded, colors: [Color(0xFF3CA55C), Color(0xFFB5AC49)]);
+  static const konkani = Category(
+      id: 'konkani', title: 'Konkani & Tulu', subtitle: 'The coast', query: 'konkani', songQuery: 'konkani songs', playlists: false,
+      moreQueries: ['tulu songs'], icon: Icons.beach_access_rounded, colors: [Color(0xFF02AAB0), Color(0xFF00CDAC)]);
+  static const northeast = Category(
+      id: 'northeast', title: 'North-East', subtitle: 'Manipuri • Khasi • Mizo', query: 'manipuri', songQuery: 'manipuri songs', playlists: false,
+      moreQueries: ['khasi songs', 'mizo songs', 'nagamese songs', 'kokborok songs'], icon: Icons.forest_rounded, colors: [Color(0xFF56AB2F), Color(0xFF1D4350)]);
+  static const dogri = Category(
+      id: 'dogri', title: 'Dogri & Kashmiri', subtitle: 'Jammu & Kashmir', query: 'dogri', songQuery: 'dogri songs', playlists: false,
+      moreQueries: ['kashmiri song'], icon: Icons.ac_unit_rounded, colors: [Color(0xFF83A4D4), Color(0xFFB6FBFF)]);
+  static const sinhala = Category(
+      id: 'sinhala', title: 'Sinhala', subtitle: 'Sri Lanka', query: 'sinhala', songQuery: 'sinhala songs', language: 'sinhalese', strictLanguage: true, playlists: false,
+      moreQueries: ['sinhala new songs'], icon: Icons.music_note_rounded, colors: [Color(0xFF8E2DE2), Color(0xFFFFB75E)]);
+
+  // ---- Folk ----
+  static const rajasthaniFolk = Category(
+      id: 'rajasthani_folk', title: 'Rajasthani folk', subtitle: 'Manganiyar • Langa', query: 'rajasthani', songQuery: 'folk songs rajasthani', language: 'rajasthani', strictLanguage: true,
+      moreQueries: ['manganiyar', 'kesariya balam'], icon: Icons.landscape_rounded, colors: [Color(0xFFE65C00), Color(0xFFF9D423)]);
+  static const punjabiFolk = Category(
+      id: 'punjabi_folk', title: 'Punjabi folk', subtitle: 'Boliyan • Tappe', query: 'punjabi folk', songQuery: 'punjabi folk songs', language: 'punjabi',
+      moreQueries: ['boliyan', 'gurdas maan'], icon: Icons.agriculture_rounded, colors: [Color(0xFFFDC830), Color(0xFF0B8793)]);
+  static const bihu = Category(
+      id: 'bihu', title: 'Bihu', subtitle: 'Assam', query: 'bihu', songQuery: 'bihu songs', language: 'assamese', icon: Icons.celebration_rounded, colors: [Color(0xFFD31027), Color(0xFFEA384D)]);
+  static const garba = Category(
+      id: 'garba', title: 'Garba & Dandiya', subtitle: 'Navratri nights', query: 'garba', songQuery: 'garba songs', language: 'gujarati',
+      moreQueries: ['dandiya songs'], icon: Icons.festival_rounded, colors: [Color(0xFFFF0084), Color(0xFFFFB347)]);
+  static const lavani = Category(
+      id: 'lavani', title: 'Lavani & Koli', subtitle: 'Maharashtra', query: 'lavani', songQuery: 'lavani', language: 'marathi',
+      moreQueries: ['koligeet'], icon: Icons.nightlife_rounded, colors: [Color(0xFFEC008C), Color(0xFFFC6767)]);
+  static const cokeStudio = Category(
+      id: 'coke_studio', title: 'Coke Studio', subtitle: 'Bharat • Bangla • Pakistan', query: 'coke studio', songQuery: 'coke studio',
+      moreQueries: ['coke studio bharat', 'coke studio bangla', 'coke studio pakistan'], icon: Icons.mic_external_on_rounded, colors: [Color(0xFFE52D27), Color(0xFFB31217)]);
 
   // ---- genres ----
   static const pop = Category(
@@ -184,12 +298,38 @@ class Catalog {
       id: 'acoustic', title: 'Acoustic', query: 'acoustic unplugged', songQuery: 'unplugged acoustic', icon: Icons.piano_rounded, colors: [Color(0xFFD38312), Color(0xFFA83279)]);
   static const jazz = Category(
       id: 'jazz', title: 'Jazz & Blues', query: 'jazz', songQuery: 'jazz', language: 'english', icon: Icons.airline_seat_recline_extra_rounded, colors: [Color(0xFF373B44), Color(0xFF4286F4)]);
+  static const rnb = Category(
+      id: 'rnb', title: 'R&B & Soul', query: 'r&b', songQuery: 'r&b soul', language: 'english', moreQueries: ['soul music', 'neo soul'],
+      icon: Icons.nightlife_rounded, colors: [Color(0xFF6A3093), Color(0xFFA044FF)]);
+  static const metal = Category(
+      id: 'metal', title: 'Metal', query: 'metal', songQuery: 'metal', language: 'english', moreQueries: ['heavy metal', 'metallica', 'linkin park'],
+      icon: Icons.bolt_rounded, colors: [Color(0xFF232526), Color(0xFF8E0E00)]);
+  static const country = Category(
+      id: 'country', title: 'Country', query: 'country', songQuery: 'country music', language: 'english', moreQueries: ['country hits'],
+      icon: Icons.agriculture_rounded, colors: [Color(0xFFC04848), Color(0xFF480048)]);
+  static const reggae = Category(
+      id: 'reggae', title: 'Reggae', query: 'reggae', songQuery: 'reggae', language: 'english', moreQueries: ['bob marley'],
+      icon: Icons.wb_sunny_rounded, colors: [Color(0xFF009245), Color(0xFFFCEE21)]);
+  static const blues = Category(
+      id: 'blues', title: 'Blues', query: 'blues', songQuery: 'blues', language: 'english', moreQueries: ['b.b. king', 'delta blues'],
+      icon: Icons.music_note_rounded, colors: [Color(0xFF2B5876), Color(0xFF4E4376)]);
+  static const westernClassical = Category(
+      id: 'western_classical', title: 'Western classical', subtitle: 'Mozart • Beethoven • Bach', query: 'classical music', songQuery: 'mozart', language: 'english',
+      moreQueries: ['beethoven symphony', 'bach', 'chopin nocturne', 'vivaldi four seasons'], icon: Icons.piano_rounded, colors: [Color(0xFF5C258D), Color(0xFF4389A2)]);
+  static const soundtracks = Category(
+      id: 'soundtracks', title: 'Film scores', subtitle: 'Soundtracks & themes', query: 'soundtrack', songQuery: 'movie soundtrack score', playlists: false,
+      moreQueries: ['hans zimmer', 'original score', 'background score'], icon: Icons.movie_filter_rounded, colors: [Color(0xFF000046), Color(0xFF1CB5E0)]);
+  static const kids = Category(
+      id: 'kids', title: 'Kids', subtitle: 'Rhymes & lullabies', query: 'kids', songQuery: 'kids nursery rhymes',
+      moreQueries: ['hindi nursery rhymes', 'lullaby'], icon: Icons.child_care_rounded, colors: [Color(0xFFFFE259), Color(0xFFFFA751)]);
 
   // ---- world ----
   static const english = Category(
-      id: 'english', title: 'English Pop', subtitle: 'Global hits', query: 'english hits', songQuery: 'english pop hits', language: 'english', icon: Icons.public_rounded, colors: [Color(0xFF1D976C), Color(0xFF93F9B9)]);
+      id: 'english', title: 'English Pop', subtitle: 'Global hits', query: 'english hits', songQuery: 'english pop hits', language: 'english',
+      moreQueries: ['english party songs', 'english pop songs', 'taylor swift', 'the weeknd', 'dua lipa', 'ed sheeran'], icon: Icons.public_rounded, colors: [Color(0xFF1D976C), Color(0xFF93F9B9)]);
   static const kpop = Category(
-      id: 'kpop', title: 'K-Pop', subtitle: 'Korea', query: 'k-pop', songQuery: 'kpop hits', language: 'korean', icon: Icons.public_rounded, colors: [Color(0xFFFF9A9E), Color(0xFFA18CD1)]);
+      id: 'kpop', title: 'K-Pop', subtitle: 'Korea', query: 'k-pop', songQuery: 'korean songs', language: 'korean', strictLanguage: true,
+      moreQueries: ['kpop', 'BLACKPINK', 'BTS', 'aespa', 'Stray Kids'], icon: Icons.public_rounded, colors: [Color(0xFFFF9A9E), Color(0xFFA18CD1)]);
   static const latin = Category(
       id: 'latin', title: 'Latin', subtitle: 'Reggaeton • Salsa', query: 'latin', songQuery: 'latin reggaeton hits', language: 'spanish', icon: Icons.public_rounded, colors: [Color(0xFFFF512F), Color(0xFFDD2476)]);
   static const arabic = Category(
@@ -198,6 +338,27 @@ class Catalog {
       id: 'jpop', title: 'J-Pop & Anime', subtitle: 'Japan', query: 'anime j-pop', songQuery: 'anime songs', language: 'japanese', icon: Icons.public_rounded, colors: [Color(0xFFEE9CA7), Color(0xFFFFDDE1)]);
   static const afro = Category(
       id: 'afro', title: 'Afrobeats', subtitle: 'Africa', query: 'afrobeats', songQuery: 'afrobeats hits', language: 'english', icon: Icons.public_rounded, colors: [Color(0xFF11998E), Color(0xFFFFD200)]);
+  static const spanish = Category(
+      id: 'spanish', title: 'Spanish', subtitle: 'Español', query: 'spanish', songQuery: 'spanish pop', language: 'spanish', strictLanguage: true,
+      moreQueries: ['canciones en español', 'spanish love songs', 'reggaeton', 'bachata'], icon: Icons.public_rounded, colors: [Color(0xFFF12711), Color(0xFFF5AF19)]);
+  static const french = Category(
+      id: 'french', title: 'French', subtitle: 'Français', query: 'french', songQuery: 'french songs', language: 'french', strictLanguage: true, playlists: false,
+      moreQueries: ['stromae', 'chanson française'], icon: Icons.public_rounded, colors: [Color(0xFF0052D4), Color(0xFFEF3B36)]);
+  static const portuguese = Category(
+      id: 'portuguese', title: 'Brazilian & Portuguese', subtitle: 'Funk • Sertanejo • Bossa', query: 'brazil', songQuery: 'portuguese songs', language: 'portuguese', strictLanguage: true, playlists: false,
+      moreQueries: ['bossa nova', 'funk brasileiro'], icon: Icons.public_rounded, colors: [Color(0xFF009C3B), Color(0xFFFFDF00)]);
+  static const turkish = Category(
+      id: 'turkish', title: 'Turkish', subtitle: 'Türkçe', query: 'turkish', songQuery: 'turkish songs', language: 'turkish', strictLanguage: true, playlists: false,
+      icon: Icons.public_rounded, colors: [Color(0xFFE30A17), Color(0xFF8E0E00)]);
+  static const german = Category(
+      id: 'german', title: 'German', subtitle: 'Deutsch', query: 'german', songQuery: 'german songs', language: 'german', strictLanguage: true, playlists: false,
+      icon: Icons.public_rounded, colors: [Color(0xFF232526), Color(0xFFDD1818)]);
+  static const italian = Category(
+      id: 'italian', title: 'Italian', subtitle: 'Italiano', query: 'italian', songQuery: 'italian songs', language: 'italian', strictLanguage: true, playlists: false,
+      icon: Icons.public_rounded, colors: [Color(0xFF009246), Color(0xFFCE2B37)]);
+  static const indonesian = Category(
+      id: 'indonesian', title: 'Indonesian', subtitle: 'Bahasa', query: 'indonesian', songQuery: 'indonesian songs', language: 'indonesian', strictLanguage: true, playlists: false,
+      moreQueries: ['lagu indonesia'], icon: Icons.public_rounded, colors: [Color(0xFFCE1126), Color(0xFFF5F5F5)]);
 
   static const groups = <CatalogGroup>[
     CatalogGroup('mood', 'Moods', 'Music for how you feel',
@@ -207,11 +368,15 @@ class Catalog {
     CatalogGroup('bengali', 'Bengali corner', 'বাংলা সঙ্গীত',
         [bengali, rabindra, nazrul, bengaliOld, bengaliAdhunik, bengaliBand, bengaliFilm, baul, durgaPuja, mahalaya]),
     CatalogGroup('india', 'Indian languages', 'Music from across India',
-        [hindi, punjabi, tamil, telugu, malayalam, kannada, marathi, gujarati, bhojpuri, odia, assamese, haryanvi]),
-    CatalogGroup('classical', 'Classical & traditional', 'Timeless forms',
-        [hindustani, carnatic, ghazal, sufi, instrumental, devotional]),
-    CatalogGroup('genre', 'Genres', 'Pick your sound', [pop, rock, hiphop, edm, indie, acoustic, jazz, lofi]),
-    CatalogGroup('world', 'Around the world', 'Sounds from everywhere', [english, kpop, latin, arabic, jpop, afro]),
+        [hindi, punjabi, tamil, telugu, malayalam, kannada, marathi, gujarati, bhojpuri, odia, assamese, haryanvi, urdu, rajasthani, garhwali, konkani, northeast, dogri, nepali, sinhala]),
+    CatalogGroup('classical', 'Indian classical', 'Ragas, masters and timeless forms',
+        [hindustani, hindustaniVocal, ragas, sitar, bansuri, santoor, shehnai, thumri, dhrupad, carnatic, carnaticVocal, veena, ghazal, sufi, instrumental, mantras, devotional]),
+    CatalogGroup('folk', 'Folk & roots', 'From villages and festivals', [rajasthaniFolk, punjabiFolk, baul, bihu, garba, lavani, cokeStudio]),
+    CatalogGroup('korean', 'Korean', '한국 음악 · K-Pop and beyond', [kpop, kgirls, kboys, kdrama, kballad, khiphop, krnb, trot]),
+    CatalogGroup('genre', 'Genres', 'Pick your sound',
+        [pop, rock, hiphop, edm, indie, acoustic, rnb, jazz, blues, metal, country, reggae, westernClassical, soundtracks, kids, lofi]),
+    CatalogGroup('world', 'Around the world', 'Sounds from everywhere',
+        [english, spanish, latin, french, portuguese, arabic, turkish, german, italian, jpop, indonesian, afro]),
   ];
 
   static final Map<String, Category> byId = {
@@ -233,6 +398,15 @@ class Catalog {
     ArtistGroup('Global stars', [
       'Taylor Swift', 'The Weeknd', 'Ed Sheeran', 'Dua Lipa', 'Coldplay', 'BTS', 'Bruno Mars', 'Billie Eilish',
     ]),
+    ArtistGroup('K-Pop', [
+      'BTS', 'BLACKPINK', 'Jimin', 'Jung Kook', 'aespa', 'NewJeans', 'Stray Kids', 'LE SSERAFIM',
+    ]),
+    ArtistGroup('Classical maestros', [
+      'Ravi Shankar', 'Bhimsen Joshi', 'Zakir Hussain', 'Hariprasad Chaurasia', 'Shivkumar Sharma', 'Bismillah Khan', 'Amjad Ali Khan', 'M. S. Subbulakshmi',
+    ]),
+    ArtistGroup('Around the world', [
+      'Bad Bunny', 'Shakira', 'Stromae', 'Burna Boy', 'Wizkid', 'Amr Diab', 'YOASOBI', 'Tarkan',
+    ]),
   ];
 
   /// Suggestions matched to the time of day.
@@ -251,7 +425,7 @@ class Catalog {
   }
 
   /// Ordered so the chips pack into as few wrapped rows as possible (short
-  /// names paired with long ones): 4 · 4 · 3 · 3.
+  /// names paired with long ones).
   static const languageChoices = <String, String>{
     'hindi': 'Hindi',
     'bengali': 'Bengali',
@@ -267,5 +441,25 @@ class Catalog {
     'bhojpuri': 'Bhojpuri',
     'assamese': 'Assamese',
     'haryanvi': 'Haryanvi',
+    'rajasthani': 'Rajasthani',
+  };
+
+  /// Languages on the New releases page. The catalogue's release feed covers
+  /// these directly...
+  static const releaseFeedLanguages = <String, String>{
+    ...languageChoices,
+    'sanskrit': 'Sanskrit',
+  };
+
+  /// ...and these are found by searching for this year's songs in the language.
+  static const releaseSearchLanguages = <String, String>{
+    'korean': 'Korean',
+    'spanish': 'Spanish',
+    'japanese': 'Japanese',
+    'french': 'French',
+    'portuguese': 'Portuguese',
+    'arabic': 'Arabic',
+    'turkish': 'Turkish',
+    'nepali': 'Nepali',
   };
 }

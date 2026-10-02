@@ -11,6 +11,32 @@ import '../widgets/detail_scaffold.dart';
 import '../widgets/shelves.dart';
 import '../widgets/track_widgets.dart';
 
+/// One song list for a category: the hand-picked songs first, then the
+/// searches taken in turns (so extra singers are spread through the list, not
+/// piled at the end). Drops re-uploads of the same song and, for
+/// [Category.strictLanguage], songs in other languages, unless that would
+/// leave the list nearly empty.
+List<Track> mixCategorySongs(Category c, {List<Track> picks = const [], required List<List<Track>> searches}) {
+  final ids = <String>{};
+  final names = <String>{};
+  final out = <Track>[];
+  void add(Track t) {
+    if (!t.isPlayable) return;
+    if (ids.add(t.id) && names.add(t.sameSongKey)) out.add(t);
+  }
+
+  picks.forEach(add);
+  final longest = searches.fold<int>(0, (m, l) => l.length > m ? l.length : m);
+  for (var i = 0; i < longest; i++) {
+    for (final l in searches) {
+      if (i < l.length) add(l[i]);
+    }
+  }
+  if (!c.strictLanguage) return out;
+  final inLanguage = out.where((t) => t.language == c.language).toList();
+  return inLanguage.length >= 8 ? inLanguage : out;
+}
+
 class _CategoryData {
   final List<Track> songs;
   final List<MediaCard> playlists;
@@ -39,19 +65,22 @@ class _CategoryScreenState extends State<CategoryScreen> {
     final api = context.read<SaavnApi>();
     final c = widget.category;
     _future = () async {
+      final queries = c.songQueries;
       final results = await Future.wait<List<Object>>([
-        api.searchSongs(c.songQuery ?? c.query, n: 40),
         api.searchPlaylists(c.query, n: 12).catchError((_) => <MediaCard>[]),
         // Hand-picked songs: the best match for each phrase, skipping any the catalogue lacks.
         Future.wait(c.picks.map((p) => api.findSongs(p, n: 3).then((r) => r.songs).catchError((_) => <Track>[])))
             .then((found) => [for (final l in found) ...l.where((t) => t.isPlayable).take(1)]),
+        // The main search must work; the extra ones only widen the list.
+        api.searchSongs(queries.first, n: 40),
+        for (final q in queries.skip(1)) api.searchSongs(q, n: 25).catchError((_) => <Track>[]),
       ]);
-      final seen = <String>{};
-      final songs = [
-        for (final t in [...results[2].cast<Track>(), ...results[0].cast<Track>()])
-          if (t.isPlayable && seen.add(t.id)) t,
-      ];
-      return _CategoryData(songs, results[1].cast<MediaCard>());
+      final songs = mixCategorySongs(
+        c,
+        picks: results[1].cast<Track>(),
+        searches: [for (final r in results.skip(2)) r.cast<Track>()],
+      );
+      return _CategoryData(songs, c.playlists ? results[0].cast<MediaCard>() : const []);
     }();
   }
 

@@ -101,6 +101,9 @@ class Track {
 
   String get artistLine => artists.isEmpty ? 'Unknown artist' : artists.map((a) => a.name).toSet().join(', ');
   String get primaryArtist => artists.isEmpty ? '' : artists.first.name;
+
+  /// Same for re-uploads of one song (same title, same singers in any order).
+  String get sameSongKey => '${title.toLowerCase().trim()}|${(artists.map((a) => a.name.toLowerCase()).toSet().toList()..sort()).join(',')}';
   int get decade => year <= 0 ? 0 : (year ~/ 10) * 10;
   bool get isPlayable => encryptedUrl.isNotEmpty;
   Duration get duration => Duration(seconds: durationSec);
@@ -237,6 +240,10 @@ class MediaCard {
   final String subtitle;
   final String image;
   final String permaUrl;
+
+  /// `YYYY-MM-DD`, when the catalogue says (new releases).
+  final String releaseDate;
+  final String language;
   const MediaCard({
     required this.kind,
     required this.id,
@@ -244,7 +251,11 @@ class MediaCard {
     this.subtitle = '',
     this.image = '',
     this.permaUrl = '',
+    this.releaseDate = '',
+    this.language = '',
   });
+
+  DateTime? get released => DateTime.tryParse(releaseDate);
 
   String art([int size = 500]) => httpsOnly(image)
       .replaceAll('150x150', '${size}x$size')
@@ -274,13 +285,23 @@ class MediaCard {
     if (k == null) return null;
     final title = _clean('${j['title'] ?? j['name'] ?? ''}');
     if (title.isEmpty) return null;
+    final mi = j['more_info'] is Map ? j['more_info'] as Map : const {};
+    var subtitle = _clean('${j['subtitle'] ?? j['header_desc'] ?? ''}');
+    // New albums come without a subtitle; name the artists instead.
+    if (subtitle.isEmpty && mi['artistMap'] is Map && mi['artistMap']['artists'] is List) {
+      subtitle = [
+        for (final a in (mi['artistMap']['artists'] as List).whereType<Map>().take(3)) _clean('${a['name'] ?? ''}'),
+      ].where((s) => s.isNotEmpty).toSet().join(', ');
+    }
     return MediaCard(
       kind: k,
       id: '${j['id']}',
       title: title,
-      subtitle: _clean('${j['subtitle'] ?? j['header_desc'] ?? ''}'),
+      subtitle: subtitle,
       image: '${j['image'] ?? ''}',
       permaUrl: '${j['perma_url'] ?? ''}',
+      releaseDate: '${mi['release_date'] ?? ''}',
+      language: '${j['language'] ?? ''}'.toLowerCase(),
     );
   }
 }

@@ -1,8 +1,8 @@
 /// Who made this, and how it may be used. Shown on the About screen.
 const kAppName = 'Samgeet';
 // Keep these two in step with `version:` in pubspec.yaml (name+build).
-const kVersionName = '1.3.3';
-const kBuildNumber = 7;
+const kVersionName = '1.4.0';
+const kBuildNumber = 9;
 const kAppVersion = '$kVersionName (build $kBuildNumber)';
 const kAuthor = 'Sambit Maity';
 const kAuthorLinkedIn = 'https://www.linkedin.com/in/sambitmaity/';

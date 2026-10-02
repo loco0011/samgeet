@@ -63,3 +63,8 @@ docs/release-checksums.md
 
 # Claude Code notes for this machine only
 CLAUDE.local.md
+
+# API address + app signing key, passed to release builds with --dart-define-from-file (never commit)
+secrets.json
+# Ready-to-upload server bundle with the private path, config and admin seed (never commit)
+/deploy/

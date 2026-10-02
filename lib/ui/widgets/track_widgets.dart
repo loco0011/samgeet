@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../data/download_service.dart';
 import '../../data/library_store.dart';
-import '../../data/share_service.dart';
 import '../../data/track.dart';
 import '../../player/player_controller.dart';
 import '../nav.dart';
 import '../theme.dart';
 import 'common.dart';
+import 'download_widgets.dart';
 
 /// A song row: artwork, title, artists, like + menu.
 class TrackTile extends StatelessWidget {
@@ -67,18 +68,23 @@ class TrackTile extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: isCurrent ? AppColors.pink : Colors.white),
               ),
               const SizedBox(height: 3),
-              Text(
-                track.artistLine,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: AppColors.muted, fontSize: 13),
-              ),
+              Row(children: [
+                DownloadBadge(trackId: track.id),
+                Expanded(
+                  child: Text(
+                    track.artistLine,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: AppColors.muted, fontSize: 13),
+                  ),
+                ),
+              ]),
             ]),
           ),
           if (showLike)
             IconButton(
               visualDensity: VisualDensity.compact,
-              onPressed: () => lib.toggleFavorite(track),
+              onPressed: () => toggleLike(context, track),
               icon: Icon(
                 lib.isFavorite(track.id) ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                 color: lib.isFavorite(track.id) ? AppColors.pink : AppColors.muted,
@@ -119,6 +125,7 @@ class _MenuItem extends StatelessWidget {
 Future<void> showTrackMenu(BuildContext context, Track t, {UserPlaylist? inPlaylist}) {
   final player = context.read<PlayerController>();
   final lib = context.read<LibraryStore>();
+  final downloads = context.read<DownloadService>();
 
   return showModalBottomSheet<void>(
     context: context,
@@ -150,11 +157,29 @@ Future<void> showTrackMenu(BuildContext context, Track t, {UserPlaylist? inPlayl
               lib.isFavorite(t.id) ? Icons.favorite_rounded : Icons.favorite_border_rounded,
               lib.isFavorite(t.id) ? 'Remove from liked songs' : 'Add to liked songs',
               () {
-                lib.toggleFavorite(t);
                 Navigator.of(sheetContext).pop();
+                toggleLike(context, t);
               },
               color: lib.isFavorite(t.id) ? AppColors.pink : null,
             ),
+          ),
+          ListenableBuilder(
+            listenable: downloads,
+            builder: (_, _) => switch (downloads.stateOf(t.id)) {
+              DownloadState.done => _MenuItem(Icons.download_done_rounded, 'Remove download', () {
+                  downloads.remove(t.id);
+                  Navigator.of(sheetContext).pop();
+                  toast(context, 'Removed from downloads');
+                }),
+              DownloadState.downloading || DownloadState.queued => _MenuItem(Icons.cancel_outlined, 'Cancel download', () {
+                  downloads.cancel(t.id);
+                  Navigator.of(sheetContext).pop();
+                }),
+              _ => _MenuItem(Icons.download_rounded, 'Download', () async {
+                  Navigator.of(sheetContext).pop();
+                  if (await downloadGated(context, [t]) > 0 && context.mounted) toast(context, 'Downloading "${t.title}" for offline listening');
+                }),
+            },
           ),
           _MenuItem(Icons.playlist_add_rounded, 'Add to playlist', () {
             Navigator.of(sheetContext).pop();
@@ -184,7 +209,7 @@ Future<void> showTrackMenu(BuildContext context, Track t, {UserPlaylist? inPlayl
             }),
           _MenuItem(Icons.ios_share_rounded, 'Share', () {
             Navigator.of(sheetContext).pop();
-            ShareService.shareTrack(t);
+            shareTrackGated(context, t);
           }),
           if (inPlaylist != null)
             _MenuItem(Icons.remove_circle_outline_rounded, 'Remove from this playlist', () {

@@ -1,7 +1,16 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- The INTERNET permission is required for development. Specifically,
          the Flutter tool needs it to communicate with the running application
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Debug only: allow http to a local test server (see res/xml/debug_network.xml). -->
+    <application
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/debug_network"
+        tools:replace="android:usesCleartextTraffic">
+        <!-- Flutter only follows per-domain rules when pointed at them. -->
+        <meta-data android:name="io.flutter.network-policy" android:resource="@xml/debug_network" />
+    </application>
 </manifest>

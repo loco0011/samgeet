@@ -4,15 +4,36 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_info.dart';
+import 'app_config.dart';
+import 'cloud_service.dart';
 
-/// A newer version of the app, as published on the GitHub releases page.
+/// A newer version of the app, as published from the admin panel (or, for builds without the
+/// server key, on the GitHub releases page).
 class AppUpdate {
   final String version; // "1.3.2"
   final String notes; // release notes, lightly cleaned for display
   final String downloadUrl; // the APK, or the release page if it has none
-  final bool required; // the notes contain "[required]": no "Later" button
+  final bool required; // no "Later" button
+  final int? sizeBytes;
 
-  const AppUpdate({required this.version, required this.notes, required this.downloadUrl, this.required = false});
+  const AppUpdate({required this.version, required this.notes, required this.downloadUrl, this.required = false, this.sizeBytes});
+
+  /// Reads the `update` object from the server's config (already known to be newer).
+  static AppUpdate? fromServer(Object? j, {String current = kVersionName}) {
+    if (j is! Map) return null;
+    final version = '${j['version'] ?? ''}'.trim();
+    final url = '${j['url'] ?? ''}';
+    if (version.isEmpty || !isTrustedLink(url)) return null;
+    final build = j['build'];
+    if (build is int ? build <= kBuildNumber : compareVersions(version, current) <= 0) return null;
+    return AppUpdate(
+      version: version,
+      notes: cleanNotes('${j['notes'] ?? ''}'),
+      downloadUrl: url,
+      required: j['required'] == true,
+      sizeBytes: j['size'] is int ? j['size'] as int : null,
+    );
+  }
 
   /// Reads the GitHub "latest release" response. Returns null if it isn't
   /// newer than [current] (or can't be understood).
@@ -34,10 +55,13 @@ class AppUpdate {
     );
   }
 
-  /// True for https links inside this project on GitHub (release pages and downloads).
+  /// True for https links inside this project on GitHub (release pages and downloads), and APKs
+  /// uploaded to Samgeet's own server.
   static bool isTrustedLink(String url) {
     final u = Uri.tryParse(url);
-    if (u == null || u.scheme != 'https' || u.host != 'github.com' || u.hasPort || u.userInfo.isNotEmpty) return false;
+    if (u == null || u.scheme != 'https' || u.hasPort || u.userInfo.isNotEmpty || u.path.contains('..')) return false;
+    if (u.host == Uri.parse(CloudService.baseUrl).host) return u.path.toLowerCase().endsWith('.apk');
+    if (u.host != 'github.com') return false;
     final base = Uri.parse(kSourceCodeUrl).path; // "/loco0011/samgeet"
     return u.path.startsWith('$base/releases/') && !u.path.contains('..');
   }
@@ -68,19 +92,33 @@ class AppUpdate {
   }
 }
 
-/// Checks GitHub for a newer release, at most a few times a day.
+/// Looks for a newer version: in what the admin panel published (fetched by [AppConfig] when the
+/// app opens), or on GitHub for builds that don't talk to Samgeet's server.
 class UpdateService {
   static const _skipKey = 'update_skip_version';
   static const _checkedKey = 'update_last_check';
 
   final http.Client _client;
-  UpdateService({http.Client? client}) : _client = client ?? http.Client();
+  final AppConfig? config;
+  UpdateService({http.Client? client, this.config}) : _client = client ?? http.Client();
 
   /// The newer version, or null if there's none (or the check failed).
-  /// Automatic checks ([manual] = false) respect "Skip this version" and only
-  /// run every 6 hours; a check from the About screen always runs.
+  /// Automatic checks ([manual] = false) respect "Skip this version"; a check from the About
+  /// screen always asks again. Required updates are always offered.
   Future<AppUpdate?> check({bool manual = false}) async {
     final prefs = await SharedPreferences.getInstance();
+    final cfg = config;
+    if (cfg != null && cfg.api.configured) {
+      if (manual || !cfg.loaded) {
+        final ok = await cfg.refresh();
+        if (!ok && manual) throw Exception('Samgeet\'s server could not be reached');
+      }
+      final update = cfg.update;
+      if (update == null) return null;
+      if (!manual && !update.required && prefs.getString(_skipKey) == update.version) return null;
+      return update;
+    }
+
     final now = DateTime.now().millisecondsSinceEpoch;
     if (!manual) {
       final last = prefs.getInt(_checkedKey) ?? 0;

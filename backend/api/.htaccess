@@ -1,10 +1,18 @@
 Options -Indexes
 
-# Never serve the credentials file.
+# Never serve the credentials file, or the one-off setup check.
 <Files "config.php">
   Require all denied
 </Files>
+<Files "check.php">
+  Require all denied
+</Files>
+
+RewriteEngine On
+
+# The bare address opens the Xypher web vault. Only "/" (and the default index files) redirect;
+# share links, the APIs and /.well-known keep working.
+RewriteRule ^(index\.(html|php)|default\.php)?$ /xypher/ [R=302,L]
 
 # Short share links: /s/<code> shows the share page for that code.
-RewriteEngine On
 RewriteRule ^s/([23456789abcdefghjkmnpqrstuvwxyz]{7})/?$ share.php?c=$1 [L,QSA]

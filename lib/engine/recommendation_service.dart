@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:math' as math;
+
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/library_store.dart';
 import '../data/saavn_api.dart';
@@ -75,35 +78,75 @@ class RecommendationService {
     );
   }
 
-  /// "Made for you": a mix built from what the listener loves right now.
-  /// Returns an empty list until there's enough listening history.
-  Future<List<Track>> madeForYou({int take = 25}) async {
-    final seeds = <Track>[
-      ...library.favorites.take(3),
-      ...library.history.take(3),
-    ];
-    final unique = <String, Track>{for (final t in seeds) t.id: t};
-    if (unique.isEmpty) return _fromPreferences(take);
-    final list = unique.values.toList()..shuffle(_rng);
-    final seed = list.first;
-    final language = seed.language.isEmpty ? 'hindi' : seed.language;
+  static const dailyMixPref = 'dailyMix';
+  static const dailyMixSize = 40;
+
+  static String _day(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// "Your Daily Mix": built once a day and kept on the phone, so the home page shows it instantly
+  /// and it stays the same all day. [force] builds a fresh one now.
+  Future<List<Track>> dailyMix({bool force = false}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = _day(DateTime.now());
+    if (!force) {
+      try {
+        final saved = jsonDecode(prefs.getString(dailyMixPref) ?? '{}') as Map;
+        if (saved['day'] == today) {
+          final tracks = [for (final m in (saved['tracks'] as List).whereType<Map>()) Track.fromJson(Map<String, dynamic>.from(m))];
+          if (tracks.isNotEmpty) return tracks;
+        }
+      } catch (_) {}
+    }
+    final mix = await madeForYou(take: dailyMixSize, rng: force ? _rng : math.Random(today.hashCode));
+    if (mix.isNotEmpty) {
+      await prefs.setString(dailyMixPref, jsonEncode({'day': today, 'tracks': [for (final t in mix) t.toJson()]}));
+    }
+    return mix;
+  }
+
+  /// "Made for you": a mix built from what the listener loves right now: songs that sound like
+  /// their likes and recent plays, their top and followed singers, and the singers they picked at
+  /// sign-in, plus a few of their own favourites to come back to. All sources are fetched at once.
+  Future<List<Track>> madeForYou({int take = dailyMixSize, math.Random? rng}) async {
+    final random = rng ?? _rng;
+    final likes = [...library.favorites.take(12)]..shuffle(random);
+    final recent = library.history.take(12).toList()..shuffle(random);
+    final seeds = <String, Track>{for (final t in [...likes.take(4), ...recent.take(4)]) t.id: t}.values.toList();
+    if (seeds.isEmpty) return _fromPreferences(take);
+    final seed = seeds.first;
+    String lang(Track t) => t.language.isEmpty || t.language == 'unknown' ? 'hindi' : t.language;
+
+    // Two radios from different seed songs, so the mix isn't one long variation on a single song.
+    final groupA = seeds.take(3).toList();
+    final groupB = seeds.skip(3).take(3).toList();
+    final singers = <String>{
+      ...library.taste.topArtists(n: 3).map((a) => a.name),
+      ...library.followedArtists.take(2).map((a) => a.name),
+      ...(library.profile?.artists ?? const <String>[]).take(2),
+    }.where((n) => n.isNotEmpty).take(5).toList();
 
     final results = await Future.wait([
-      _safe(() => api.radio(list.take(3).map((t) => t.id).toList(), language: language, count: 30)),
-      ...library.taste.topArtists(n: 2).map((a) => _safe(() => api.searchSongs(a.name, n: 12))),
+      _safe(() => api.radio(groupA.map((t) => t.id).toList(), language: lang(groupA.first), count: 30)),
+      _safe(() => groupB.isEmpty ? Future.value(<Track>[]) : api.radio(groupB.map((t) => t.id).toList(), language: lang(groupB.first), count: 30)),
+      for (final name in singers) _safe(() => api.searchSongs(name, n: 15)),
     ]);
+    final favourites = library.favorites.toList()..shuffle(random);
     final pool = <Candidate>[
       ..._asCandidates(results[0], CandidateSource.radio),
-      for (final r in results.skip(1)) ..._asCandidates(r, CandidateSource.taste, start: 0.8),
+      ..._asCandidates(results[1], CandidateSource.radio, start: 0.95),
+      for (final r in results.skip(2)) ..._asCandidates(r, CandidateSource.taste, start: 0.8),
+      // A handful of songs they already love, mixed in among the new ones.
+      ..._asCandidates(favourites.take(6).toList(), CandidateSource.taste, start: 0.6),
     ].where((c) => c.track.isPlayable).toList();
 
     return Recommender.rank(
       seed: seed,
       pool: pool,
       taste: library.taste,
-      exclude: {for (final t in list) t.id},
+      // Not what they just heard; the seeds themselves may come back later in the mix.
+      exclude: {...library.history.take(15).map((t) => t.id)},
       take: take,
-      rng: _rng,
+      rng: random,
     );
   }
 
@@ -112,8 +155,8 @@ class RecommendationService {
   Future<List<Track>> _fromPreferences(int take) async {
     final prefs = library.profile?.artists ?? const <String>[];
     if (prefs.isEmpty) return const [];
-    final picks = ([...prefs]..shuffle(_rng)).take(3).toList();
-    final results = await Future.wait(picks.map((a) => _safe(() => api.searchSongs(a, n: 12))));
+    final picks = ([...prefs]..shuffle(_rng)).take(5).toList();
+    final results = await Future.wait(picks.map((a) => _safe(() => api.searchSongs(a, n: 15))));
     final pool = <Candidate>[
       for (final r in results) ..._asCandidates(r, CandidateSource.taste, start: 0.9),
     ].where((c) => c.track.isPlayable).toList();

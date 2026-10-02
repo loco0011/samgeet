@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
+import '../../data/download_service.dart';
 import '../mood_theme.dart';
 import '../theme.dart';
 
@@ -23,9 +25,13 @@ class Artwork extends StatelessWidget {
       alignment: Alignment.center,
       child: Icon(circle ? Icons.person_rounded : Icons.music_note_rounded, color: Colors.white70, size: (size ?? 56) * 0.42),
     );
+    // A downloaded song's cover is on the phone, so it shows offline too.
+    final local = DownloadService.localArt(url);
     final Widget img = url.isEmpty
         ? placeholder
-        : CachedNetworkImage(
+        : local != null
+            ? Image.file(File(local), fit: BoxFit.cover, cacheWidth: cacheSize, errorBuilder: (_, _, _) => placeholder)
+            : CachedNetworkImage(
             imageUrl: url,
             fit: BoxFit.cover,
             memCacheWidth: cacheSize,

@@ -2,7 +2,7 @@
 
 **An open-source, ad-free music player for Android — created by [Sambit Maity](https://www.linkedin.com/in/sambitmaity/).**
 
-Streams up to 320 kbps, smart mood-matched autoplay, on-device taste learning, an equalizer, background playback with lock-screen controls, and a library that syncs across your phones.
+Streams up to 320 kbps, downloads for offline listening in the same quality, smart mood-matched autoplay, on-device taste learning, an equalizer with your own saved sounds, live new releases, music from India's languages and classical traditions to K-Pop and the rest of the world, background playback with lock-screen controls, and a library that syncs across your phones.
 
 [![Download APK](https://img.shields.io/badge/Download-Samgeet.apk-7c4dff?style=for-the-badge&logo=android&logoColor=white)](https://github.com/loco0011/samgeet/releases/latest/download/Samgeet.apk)
 [![Latest release](https://img.shields.io/github/v/release/loco0011/samgeet?style=for-the-badge)](https://github.com/loco0011/samgeet/releases/latest)
@@ -23,7 +23,13 @@ Sharing a song or playlist sends a short link like `https://api.sambitmaity.fun/
 "Play *song* on Samgeet" works from Bixby and Google Assistant: Samgeet registers as a music app, and the spoken query plays the best match. "Play music on Samgeet" resumes the queue.
 
 ## Equalizer
-The player's **Sound** button opens an equalizer (a curve you drag, presets such as Bass boost, Vocal and Late night, and a loudness boost). It uses Android's built-in `Equalizer` and `LoudnessEnhancer` effects, so it works on Android only. Settings are saved and sync with your account.
+The player's **Sound** button opens an equalizer (a curve you drag, presets such as Bass boost, Vocal and Late night, and a loudness boost). Tune it the way you like and tap **Save** to keep it as your own sound under any name (up to 20); long-press one to rename it, update it or delete it. It uses Android's built-in `Equalizer` and `LoudnessEnhancer` effects, so it works on Android only. Settings and saved sounds sync with your account.
+
+## Offline downloads
+Tap ⋮ on a song and choose **Download**, or the download button on an album, playlist or Liked songs. Downloaded songs play without internet, from the very same audio file the app streams (Settings → Downloads picks the quality, up to 320 kbps, about 9 MB for a 4-minute song). They live in **Library → Downloads**, show a small tick wherever they appear, and are kept privately inside the app on that phone: not synced, not in the phone's cloud backup, and gone if the app is uninstalled. When the phone is offline the home screen offers to play them.
+
+## New releases and browsing
+Home shows the catalogue's newest albums and singles in your languages, refreshed every few minutes; **See all** lists them by day for any language, including this year's Korean, Spanish, Japanese, French, Portuguese, Arabic, Turkish and Nepali songs. Explore covers moods, decades, 20 Indian languages, Indian classical (ragas, khayal, sitar, bansuri, santoor, shehnai, thumri, dhrupad, Carnatic vocal, veena, mantras), folk (Rajasthani, Punjabi, Baul, Bihu, Garba, Lavani, Coke Studio), Korean (K-Pop, girl and boy groups, K-Drama OSTs, ballads, hip-hop, R&B, trot), genres from metal to Western classical, and music from around the world.
 
 ## Build from source
 - Build APK: `flutter build apk --release` → `build/app/outputs/flutter-apk/app-release.apk`
@@ -56,7 +62,12 @@ The app recolours itself to the song's mood (Romantic, Melancholy, Party, Chill,
 ## Accounts and sync
 Signing in takes an email and a password. If that account exists, its library comes back to the phone (playlists, liked songs, history, followed artists, recent searches, taste, settings, equalizer and profile); if not, a new account starts from what's on the phone. A wrong password for a known email is refused rather than creating a second, empty account. After that, every phone signed in to the account stays in sync: changes are merged (deletions included) when the app opens, comes back to the front, or a few seconds after you change something. See `lib/data/sync_service.dart`.
 
-The password never leaves the phone: PBKDF2 (150,000 rounds, salted with the email) turns it into the account key, and the server (a small PHP + MySQL API, see [`backend/`](backend/README.md)) stores only a hash of it, so a forgotten password can't be reset. The library is stored compressed, not encrypted. Profile photos stay on the phone. Signing out only stops syncing on that phone; the account keeps its library. There is no in-app way yet to delete an account's library from the server.
+The password never leaves the phone: PBKDF2 (150,000 rounds, salted with the email) turns it into the account key, and the server (a small PHP + MySQL API, see [`backend/`](backend/README.md)) stores only a hash of it, so a forgotten password can't be reset. The library is stored compressed, not encrypted. Profile photos stay on the phone. Signing out only stops syncing on that phone; the account keeps its library. Settings › Delete my account removes the account, its library and its listening data from the server.
+
+Liking, downloading and sharing songs need an account, and signed-in listeners can pick a player look (Disc, Cover, Immersive or Minimal). The app records listening data (plays and how long, skips, likes, downloads, shares, searches, phone model and app version) for analysis; see `NOTICE.md`.
+
+## Server, admin panel, updates and messages
+The app talks to a private API path on `api.sambitmaity.fun` (`backend/samgeet/`). Every request is signed with a key built into release builds, and signed-in calls carry a session token, so the server only answers the app and each account only reaches its own data. The address and key are not in git: release builds read them from `secrets.json` (`flutter build apk --release --dart-define-from-file=secrets.json`). The admin panel next to the API shows listening reports, accounts and a CSV export, publishes app updates (which phones offer about 4 s after opening) and sends messages that show as a popup, a phone notification, or both. Phones check for new messages when the app opens and every 30 minutes while it runs. See [`backend/README.md`](backend/README.md).
 
 The profile also holds a name and favourite languages/moods/singers, which seed the recommendations. Optionally (off by default) it keeps the device model and an approximate, city-level location. Guests can keep 5 songs per playlist and can't share playlists; signing in lifts both limits.
 

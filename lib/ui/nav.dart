@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/catalog.dart';
+import '../data/download_service.dart';
 import '../data/library_store.dart';
 import '../data/share_service.dart';
 import '../data/saavn_api.dart';
@@ -91,12 +92,32 @@ Future<void> openCard(BuildContext context, MediaCard c) async {
   }
 }
 
-/// Makes sure the listener has a profile, asking them to create one if not.
-/// Returns true when they are signed in (already, or just now).
+/// Makes sure the listener is signed in to an account (email + password), asking them to sign in
+/// if not. Returns true when they are (already, or just now).
 Future<bool> requireSignIn(BuildContext context, {required String reason}) async {
-  if (context.read<LibraryStore>().signedIn) return true;
+  final lib = context.read<LibraryStore>();
+  if (lib.hasAccount) return true;
   final ok = await Navigator.of(context, rootNavigator: true).push<bool>(fadeRoute(SignInScreen(reason: reason), coverBelow: true));
-  return ok == true;
+  return ok == true && lib.hasAccount;
+}
+
+/// Liking a song needs an account.
+Future<void> toggleLike(BuildContext context, Track t) async {
+  if (!await requireSignIn(context, reason: 'Sign in to like songs. Your likes follow you to every phone.')) return;
+  if (context.mounted) context.read<LibraryStore>().toggleFavorite(t);
+}
+
+/// Downloading needs an account. Returns how many songs were queued (0 if not signed in).
+Future<int> downloadGated(BuildContext context, Iterable<Track> tracks) async {
+  if (!await requireSignIn(context, reason: 'Sign in to download songs and listen without internet.')) return 0;
+  if (!context.mounted) return 0;
+  return context.read<DownloadService>().downloadAll(tracks);
+}
+
+/// Sharing a song needs an account.
+Future<void> shareTrackGated(BuildContext context, Track t) async {
+  if (!await requireSignIn(context, reason: 'Sign in to share songs with your friends.')) return;
+  await ShareService.shareTrack(t);
 }
 
 /// Guests can keep up to [LibraryStore.guestPlaylistLimit] songs in a playlist.

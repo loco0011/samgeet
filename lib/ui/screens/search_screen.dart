@@ -16,15 +16,19 @@ import '../widgets/track_widgets.dart';
 
 class _Results {
   final List<Track> songs;
+  final String songQuery; // the spelling that found the songs (for loading more)
   final List<MediaCard> albums;
   final List<MediaCard> playlists;
   final List<ArtistRef> artists;
-  const _Results(this.songs, this.albums, this.playlists, this.artists);
+  const _Results(this.songs, this.albums, this.playlists, this.artists, {required this.songQuery});
   bool get isEmpty => songs.isEmpty && albums.isEmpty && playlists.isEmpty && artists.isEmpty;
 }
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
+
+  /// Set to run a search from elsewhere (a message from Samgeet with a "Search" button).
+  static final request = ValueNotifier<String?>(null);
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -44,7 +48,22 @@ class _SearchScreenState extends State<SearchScreen> {
   Future<_Results>? _results;
 
   @override
+  void initState() {
+    super.initState();
+    SearchScreen.request.addListener(_requested);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _requested());
+  }
+
+  void _requested() {
+    final q = SearchScreen.request.value;
+    if (q == null || !mounted) return;
+    SearchScreen.request.value = null;
+    _submit(q);
+  }
+
+  @override
   void dispose() {
+    SearchScreen.request.removeListener(_requested);
     _debounce?.cancel();
     _controller.dispose();
     _focus.dispose();
@@ -69,10 +88,11 @@ class _SearchScreenState extends State<SearchScreen> {
       api.suggestions(v).then((s) {
         if (mounted && seq == _suggestSeq) setState(() => _suggestions = s);
       }, onError: (_) {});
-      api.findSongs(v, n: 15).then((r) {
+      // Same size as the full search, so pressing search reuses these results from the cache.
+      api.findSongs(v, n: 30, quick: true).then((r) {
         if (mounted && seq == _suggestSeq) {
           setState(() {
-            _live = r.songs.where((t) => t.isPlayable).toList();
+            _live = r.songs.where((t) => t.isPlayable).take(15).toList();
             _liveLoading = false;
           });
         }
@@ -118,6 +138,7 @@ class _SearchScreenState extends State<SearchScreen> {
           rest[0].cast<MediaCard>(),
           rest[1].cast<MediaCard>(),
           rest[2].cast<ArtistRef>(),
+          songQuery: fixed ?? query,
         );
       }();
     });
@@ -224,7 +245,7 @@ class _Landing extends StatelessWidget {
       ],
       const SectionHeader('Browse all', subtitle: 'Tap a mood, language or era'),
       CategoryGrid(
-        items: [Catalog.bengali, Catalog.hindi, Catalog.romantic, Catalog.chill, Catalog.era90, Catalog.era80, Catalog.rabindra, Catalog.ghazal, Catalog.punjabi, Catalog.party, Catalog.workout, Catalog.lofi, Catalog.english, Catalog.kpop],
+        items: [Catalog.bengali, Catalog.hindi, Catalog.romantic, Catalog.chill, Catalog.era90, Catalog.era80, Catalog.rabindra, Catalog.ghazal, Catalog.punjabi, Catalog.party, Catalog.workout, Catalog.lofi, Catalog.english, Catalog.kpop, Catalog.kdrama, Catalog.ragas, Catalog.spanish, Catalog.cokeStudio],
         onTap: (c) => openCategory(context, c),
       ),
     ]);
@@ -270,15 +291,7 @@ class _ResultsView extends StatelessWidget {
               child: TabBarView(children: [
                 r.songs.isEmpty
                     ? const EmptyState(icon: Icons.music_off_rounded, title: 'No songs found')
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 30),
-                        itemCount: r.songs.length,
-                        itemBuilder: (_, i) => TrackTile(
-                          track: r.songs[i],
-                          showLike: true,
-                          onTap: () => context.read<PlayerController>().playSingle(r.songs[i]),
-                        ),
-                      ),
+                    : _SongResults(first: r.songs, query: r.songQuery),
                 _grid(context, r.artists.map((a) => MediaCard(kind: CardKind.artist, id: a.id, title: a.name, image: a.image)).toList(), circle: true),
                 _grid(context, r.albums),
                 _grid(context, r.playlists),
@@ -305,6 +318,86 @@ class _ResultsView extends StatelessWidget {
           circle: circle,
           onTap: () => openCard(context, cards[i]),
         ),
+      ),
+    );
+  }
+}
+
+
+/// The songs tab: the best matches first, then more pages of the catalogue's results as you scroll.
+class _SongResults extends StatefulWidget {
+  final List<Track> first;
+  final String query;
+  const _SongResults({required this.first, required this.query});
+
+  @override
+  State<_SongResults> createState() => _SongResultsState();
+}
+
+class _SongResultsState extends State<_SongResults> {
+  static const _maxPages = 6;
+  late final List<Track> _songs = [...widget.first];
+  late final Set<String> _ids = {for (final t in widget.first) t.id};
+  int _page = 1;
+  bool _loading = false;
+  bool _done = false;
+
+  Future<void> _more() async {
+    if (_loading || _done) return;
+    setState(() => _loading = true);
+    final api = context.read<SaavnApi>();
+    var added = 0;
+    try {
+      // Page 1 is already in; keep fetching until something new turns up.
+      while (added == 0 && _page < _maxPages) {
+        _page++;
+        final next = await api.searchSongs(widget.query, n: 30, page: _page);
+        if (next.isEmpty) break;
+        for (final t in next) {
+          if (t.isPlayable && _ids.add(t.id)) {
+            _songs.add(t);
+            added++;
+          }
+        }
+      }
+      if (added == 0) _done = true;
+    } catch (_) {
+      if (mounted) toast(context, "Couldn't load more songs. Check your connection.");
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      if (_page >= _maxPages) _done = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return NotificationListener<ScrollNotification>(
+      // Load the next page a little before the end, so scrolling doesn't stop.
+      onNotification: (n) {
+        if (n.metrics.extentAfter < 400) _more();
+        return false;
+      },
+      child: ListView.builder(
+        padding: const EdgeInsets.only(bottom: 30),
+        itemCount: _songs.length + 1,
+        itemBuilder: (_, i) {
+          if (i == _songs.length) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: _loading
+                    ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5))
+                    : _done
+                        ? Text('${_songs.length} songs', style: const TextStyle(color: AppColors.muted))
+                        : TextButton.icon(onPressed: _more, icon: const Icon(Icons.expand_more_rounded), label: const Text('Show more songs')),
+              ),
+            );
+          }
+          final t = _songs[i];
+          return TrackTile(track: t, showLike: true, onTap: () => context.read<PlayerController>().playSingle(t));
+        },
       ),
     );
   }

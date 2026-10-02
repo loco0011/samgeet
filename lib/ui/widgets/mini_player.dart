@@ -12,6 +12,7 @@ import 'common.dart';
 import 'dominant_color.dart';
 import 'glass.dart';
 import '../mood_theme.dart';
+import '../nav.dart';
 
 /// The floating "now playing" capsule: a glowing progress ring around a
 /// spinning cover. Swipe sideways to skip, tap to expand.
@@ -81,7 +82,7 @@ class MiniPlayer extends StatelessWidget {
                         Consumer<LibraryStore>(
                           builder: (_, lib, _) => IconButton(
                             visualDensity: VisualDensity.compact,
-                            onPressed: () => lib.toggleFavorite(track),
+                            onPressed: () => toggleLike(context, track),
                             icon: Icon(
                               lib.isFavorite(track.id) ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                               size: 22,

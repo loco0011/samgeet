@@ -69,14 +69,35 @@ class SaavnApi {
 
   final http.Client _client;
   final Map<String, _Cached> _cache = {};
+  // Requests on their way, so the same call made twice at once (typing, then pressing search)
+  // goes over the network once.
+  final Map<String, Future<dynamic>> _inflight = {};
   SaavnApi({http.Client? client}) : _client = client ?? http.Client();
+
+  /// Searches ignore case and extra spaces, so "Arijit  Singh" and "arijit singh" share a cache entry.
+  static String normQuery(String q) => q.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
 
   Future<dynamic> _get(
     String call,
     Map<String, String> params, {
     Duration ttl = const Duration(minutes: 15),
     String? cookie,
-  }) async {
+    bool force = false,
+  }) {
+    final key = '$call|${jsonEncode(params)}|${cookie ?? ''}';
+    final hit = _cache[key];
+    if (!force && hit != null && DateTime.now().isBefore(hit.expires)) return Future.value(hit.value);
+    final running = _inflight[key];
+    if (running != null && !force) return running;
+    // (A block body: returning the removed future here would make it wait for itself.)
+    final f = _fetch(call, params, key, ttl, cookie).whenComplete(() {
+      _inflight.remove(key);
+    });
+    _inflight[key] = f;
+    return f;
+  }
+
+  Future<dynamic> _fetch(String call, Map<String, String> params, String key, Duration ttl, String? cookie) async {
     final q = <String, String>{
       '__call': call,
       '_format': 'json',
@@ -86,9 +107,6 @@ class SaavnApi {
       ...params,
     };
     final uri = Uri.https(_host, '/api.php', q);
-    final key = '${uri.toString()}|${cookie ?? ''}';
-    final hit = _cache[key];
-    if (hit != null && DateTime.now().isBefore(hit.expires)) return hit.value;
 
     Object? lastError;
     for (var attempt = 0; attempt < 2; attempt++) {
@@ -147,7 +165,7 @@ class SaavnApi {
 
   // ---- search ----
   Future<List<Track>> searchSongs(String query, {int n = 30, int page = 1}) async {
-    final j = await _get('search.getResults', {'q': query, 'p': '$page', 'n': '$n'});
+    final j = await _get('search.getResults', {'q': normQuery(query), 'p': '$page', 'n': '$n'});
     return _tracks(j['results']);
   }
 
@@ -161,8 +179,11 @@ class SaavnApi {
   ///  * when the direct results are thin or don't look like what was typed,
   ///    tries the autocomplete's guesses and the query with each word left out;
   /// then ranks everything by how closely it matches the query.
-  Future<SongSearch> findSongs(String query, {int n = 30}) async {
-    final q = query.trim();
+  ///
+  /// [quick] is for results while typing: the extra spellings are only tried when the direct
+  /// search found nothing, so each pause in typing costs two or three requests, not eight.
+  Future<SongSearch> findSongs(String query, {int n = 30, bool quick = false}) async {
+    final q = query.trim().replaceAll(RegExp(r'\s+'), ' ');
     final direct = await Future.wait<dynamic>([
       searchSongs(q, n: n),
       _autocomplete(q).catchError((_) => null),
@@ -173,7 +194,7 @@ class SaavnApi {
     final guesses = [for (final e in _acEntries(ac, const ['topquery', 'songs'])) cleanText('${e['title'] ?? ''}')];
 
     double best(List<Track> l) => l.take(5).fold(0.0, (m, t) => math.max(m, Fuzzy.songScore(q, t)));
-    final strong = primary.length >= 8 && best(primary) >= 0.8;
+    final strong = quick ? primary.isNotEmpty : primary.length >= 8 && best(primary) >= 0.8;
 
     final lower = q.toLowerCase();
     final alternatives = strong
@@ -224,17 +245,17 @@ class SaavnApi {
   }
 
   Future<List<MediaCard>> searchPlaylists(String query, {int n = 12}) async {
-    final j = await _get('search.getPlaylistResults', {'q': query, 'p': '1', 'n': '$n'});
+    final j = await _get('search.getPlaylistResults', {'q': normQuery(query), 'p': '1', 'n': '$n'});
     return _cards(j['results']).map((c) => c).toList();
   }
 
   Future<List<MediaCard>> searchAlbums(String query, {int n = 12}) async {
-    final j = await _get('search.getAlbumResults', {'q': query, 'p': '1', 'n': '$n'});
+    final j = await _get('search.getAlbumResults', {'q': normQuery(query), 'p': '1', 'n': '$n'});
     return _cards(j['results']);
   }
 
   Future<List<ArtistRef>> searchArtists(String query, {int n = 12}) async {
-    final j = await _get('search.getArtistResults', {'q': query, 'p': '1', 'n': '$n'});
+    final j = await _get('search.getArtistResults', {'q': normQuery(query), 'p': '1', 'n': '$n'});
     final list = j['results'];
     if (list is! List) return const [];
     return list
@@ -249,7 +270,7 @@ class SaavnApi {
   }
 
   Future<dynamic> _autocomplete(String query) =>
-      _get('autocomplete.get', {'query': query.trim()}, ttl: const Duration(minutes: 5));
+      _get('autocomplete.get', {'query': normQuery(query)}, ttl: const Duration(minutes: 5));
 
   List<Map> _acEntries(dynamic j, List<String> keys) => [
         for (final k in keys)
@@ -408,6 +429,45 @@ class SaavnApi {
       charts: _cards(j['charts']),
       artists: _artistCards(j['artist_recos']),
     );
+  }
+
+  // ---- new releases ----
+  /// The catalogue's newest albums and singles in [languages], newest first.
+  /// Cached only briefly, so what just came out shows up soon after.
+  Future<List<MediaCard>> newReleases(List<String> languages, {int page = 1, int n = 40, bool force = false}) async {
+    final cookie = 'L=${languages.isEmpty ? 'hindi' : languages.join(',')}';
+    final j = await _get('content.getAlbums', {'n': '$n', 'p': '$page'}, cookie: cookie, ttl: const Duration(minutes: 5), force: force);
+    return sortByRelease(_cards(j is Map ? j['data'] : j));
+  }
+
+  /// Newest first; undated cards keep their place at the end.
+  static List<MediaCard> sortByRelease(List<MediaCard> cards) {
+    final dated = cards.where((c) => c.released != null).toList()..sort((a, b) => b.released!.compareTo(a.released!));
+    return [...dated, ...cards.where((c) => c.released == null)];
+  }
+
+  /// This year's songs in a language the release feed doesn't cover
+  /// (Korean, Japanese, French...), found by searching and kept only when
+  /// both the language and the year match.
+  Future<List<Track>> latestSongs(String language, {DateTime? now}) async {
+    final year = (now ?? DateTime.now()).year;
+    final pages = await Future.wait([
+      for (final p in [1, 2]) searchSongs('$language $year', n: 50, page: p).catchError((_) => <Track>[]),
+    ]);
+    return freshInLanguage([for (final l in pages) ...l], language, year);
+  }
+
+  /// Keeps [year]'s songs in [language] (last year's too, early in the year
+  /// when there are few), one copy of each title per artist.
+  static List<Track> freshInLanguage(List<Track> songs, String language, int year) {
+    final inLang = songs.where((t) => t.language == language && t.isPlayable).toList();
+    var fresh = inLang.where((t) => t.year >= year).toList();
+    if (fresh.length < 10) fresh = inLang.where((t) => t.year >= year - 1).toList();
+    final seen = <String>{};
+    return [
+      for (final t in fresh)
+        if (seen.add(t.sameSongKey)) t,
+    ];
   }
 
   void dispose() => _client.close();

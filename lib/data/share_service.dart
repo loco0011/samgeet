@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
 
+import 'analytics.dart';
+import 'api_client.dart';
 import 'cloud_service.dart';
 import 'library_store.dart';
 import 'track.dart';
@@ -55,8 +57,21 @@ class ShareService {
   static const shortCodeChars = '23456789abcdefghjkmnpqrstuvwxyz';
   static final shortCodePattern = RegExp('^[$shortCodeChars]{7}\$');
 
+  /// Samgeet's signed API (set at startup). Short links are made there, as the signed-in listener.
+  static ApiClient? api;
+
+  /// Records shares (set at startup).
+  static Analytics? analytics;
+
   /// Asks the server for a short link standing for [payload]; null if it can't be reached.
   static Future<String?> _shortLink(Map<String, Object> payload, http.Client? client) async {
+    final signed = api;
+    if (client == null && signed != null && signed.configured) {
+      final r = await signed.post('link', payload, timeout: const Duration(seconds: 6));
+      final code = r?.ok == true ? r!.json['code'] : null;
+      return code is String && shortCodePattern.hasMatch(code) ? '${CloudService.baseUrl}/s/$code' : null;
+    }
+    // Builds without the API key (and tests) use the public endpoint of app 1.3.x.
     final c = client ?? http.Client();
     try {
       final r = await c
@@ -91,6 +106,7 @@ class ShareService {
 
   static Future<void> shareTrack(Track t) async {
     final link = await shortSongLink(t);
+    analytics?.log('share_song', track: t, value: link.contains('/s/') ? link.split('/s/').last : 'long');
     await SharePlus.instance.share(ShareParams(
       text: '🎵 ${t.title} · ${t.primaryArtist}\nListen on Samgeet 👉 $link',
       subject: t.title,
@@ -141,6 +157,7 @@ class ShareService {
 
   static Future<void> sharePlaylist(String name, List<Track> tracks) async {
     final link = await shortPlaylistLink(name, tracks);
+    analytics?.log('share_playlist', value: link.contains('/s/') ? link.split('/s/').last : 'long', meta: {'name': name, 'songs': tracks.length});
     final firstFew = tracks.take(3).map((t) => t.title).join(', ');
     final more = tracks.length > 3 ? ' and ${tracks.length - 3} more' : '';
     await SharePlus.instance.share(ShareParams(

@@ -71,3 +71,73 @@ link opens the app directly instead of the browser. It lists the SHA-256 fingerp
 signing key, so builds signed with another key (debug builds) won't open the links. If the file isn't
 live yet, links open the web page, whose **Open in Samgeet** button still works. To re-check on a phone:
 `adb shell pm get-app-links app.samgeet.music` should show `api.sambitmaity.fun: verified`.
+
+## Version 2: private API, admin panel, listening data (`samgeet/`, app 1.4.0+)
+App 1.4.0 and newer talk to `samgeet/`, uploaded under a private folder on the API subdomain:
+`https://api.sambitmaity.fun/<private id>/samgeet/`. The private id, the app signing key and the
+admin seed live only in the git-ignored `deploy/` folder and `secrets.json` (never in git).
+
+```
+samgeet/
+  .htaccess          blocks config.php, lib/, schema.sql; no listings; noindex
+  config.php         'app_key' => 64 hex (same as SAMGEET_APP_KEY in secrets.json); the DB login comes
+                     from samgeet_config.php or the first API's config.php (found in the folders above)
+  lib/bootstrap.php  config, DB, rate limits, request signature + session checks
+  api/auth.php       check_email, login, register, profile, logout, delete_account
+  api/library.php    synced library: load / save with base_rev (409 on conflict)
+  api/events.php     listening data in batches (up to 200 events)
+  api/app.php        config at app start: newest published update + messages; receipts
+  api/link.php       short share links (signed in only)
+  admin/index.php    the admin panel; admin/.user.ini lets it take ~60 MB APK uploads
+  files/             APKs uploaded from the admin panel (only .apk is served)
+  schema.sql         tables (run once in phpMyAdmin; safe to run again)
+```
+
+**Who can call it.** Every app request is signed: `X-Samgeet-Device` (the install's random id),
+`X-Samgeet-Time` and `X-Samgeet-Sign` = HMAC-SHA256(app_key, endpoint, time, device, sha256(body)).
+Anything unsigned, signed for another endpoint, or more than 5 minutes old gets a bare 404
+(`no_route`). Signed-in calls also send `X-Samgeet-Session`, a random token from `login`/`register`
+(stored hashed, tied to that phone, renewed on use, expires after 120 idle days). The library,
+profile and deletion are always chosen by the session's account, never by an id in the request.
+Limits: 400 requests per IP and 150 per phone every 10 minutes, 20 sign-in tries per phone. The key
+ships inside the APK, so treat it as a speed bump: the sessions and limits are the real protection.
+
+**Accounts from 1.3.x** move over by themselves: the first `login` with an account key that only
+exists in the old `backups` table copies it (and the profile name) into `users` + `libraries`.
+Leave the old `profile.php`, `backup.php` and `link.php` in place until every phone has updated
+(the GitHub release for 1.4.0 is marked `[required]`), then delete `profile.php` and `backup.php`.
+`share.php`, `/s/<code>` and `GET link.php?c=` stay public: friends open shared links in a browser.
+
+**Tables** (`schema.sql`): `users` 1-n `devices`, `sessions`, `user_tastes`, `events`; `users` 1-1
+`libraries`; `tracks` n-n `artists` via `track_artists`; `events` reference `devices`, `users` and
+`tracks`; `admins` 1-n `releases`, `notifications`; `notifications` 1-n `notification_receipts`
+(per phone: delivered, opened, dismissed). Deleting a user removes its sessions, library, tastes
+and events. All times are stored in UTC; the admin panel shows IST.
+
+**Event types**: `app_open`, `app_close`, `play_start` (value: where it was started), `play_end`
+(ms listened; value `complete` / `skip` / `stop`; meta `frac`), `like`, `unlike`, `download`,
+`download_remove`, `share_song` / `share_playlist` (value: short code), `search` (value: the text),
+`playlist_create`, `playlist_add`, `queue_add`, `radio_start`, `sleep_timer`, `player_style`,
+`sign_in`, `sign_up`, `sign_out`, `device_info` (opt-in city), `notification_open` /
+`notification_dismiss`, `update_open` / `update_later`.
+
+**Admin panel** (`.../samgeet/admin/`): sign in with an `admins` row (bcrypt). Five wrong
+passwords in 15 minutes lock that address out; sessions end after 2 hours idle or 12 hours. Pages:
+Overview (period switch: today, 7, 30, 90 days or all time; total, active today/week/month, new,
+returning and signed-in accounts; total, active, guest and online phones; share on the latest version;
+plays, listeners, hours, completion and skip rates, offline plays; likes, downloads, shares, searches,
+playlists, sign-ups, message open rate; daily charts; top songs/singers/searches/listeners; tastes;
+languages, hours of day, app versions, phones, player looks), Accounts (search, details, sign out
+everywhere, block, delete), App updates (upload an APK or paste a link, "fill in from GitHub",
+required or not, publish/unpublish), Notifications (popup / phone notification / both; a button to
+update, open a link or search; audience; schedule; reach and open rates), Export (events as CSV).
+
+### Deploying version 2
+1. phpMyAdmin → SQL: run `deploy/1-schema.sql`, then `deploy/2-admin.sql` (the admin login).
+2. Upload the folder `deploy/upload/<private id>/` into the API subdomain's web folder (the one
+   with `share.php`), so `https://api.sambitmaity.fun/<private id>/samgeet/admin/` opens the panel.
+3. Check: `.../samgeet/api/app.php` answers `{"error":"no_route"}` (404) in a browser,
+   `.../samgeet/config.php` and `.../samgeet/lib/bootstrap.php` are refused (403), and the admin
+   panel signs in.
+4. Build the app with `--dart-define-from-file=secrets.json`, publish it on GitHub (marked
+   `[required]` so 1.3.x phones update), then add it under Admin → App updates for 1.4.0+ phones.

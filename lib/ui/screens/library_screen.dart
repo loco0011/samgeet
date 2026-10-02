@@ -13,12 +13,13 @@ import '../nav.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/detail_scaffold.dart';
+import '../widgets/download_widgets.dart';
 import '../widgets/glass.dart';
 import 'sign_in_screen.dart';
 import '../widgets/shelves.dart';
 import '../widgets/track_widgets.dart';
 
-enum _Tab { playlists, liked, artists, history }
+enum _Tab { playlists, downloads, liked, artists, history }
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -33,7 +34,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final lib = context.watch<LibraryStore>();
-    const labels = {_Tab.playlists: 'Playlists', _Tab.liked: 'Liked', _Tab.artists: 'Artists', _Tab.history: 'History'};
+    const labels = {_Tab.playlists: 'Playlists', _Tab.downloads: 'Downloads', _Tab.liked: 'Liked', _Tab.artists: 'Artists', _Tab.history: 'History'};
 
     return SafeArea(
       bottom: false,
@@ -43,7 +44,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           child: Row(children: [
             const Expanded(child: Text('Your library', style: TextStyle(fontFamily: kDisplay, fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -1))),
             IconButton(tooltip: lib.signedIn ? 'Your profile' : 'Sign in', icon: Icon(lib.signedIn ? Icons.account_circle_rounded : Icons.account_circle_outlined), onPressed: () => pushPage(context, const SignInScreen())),
-            IconButton(tooltip: 'Import playlist', icon: const Icon(Icons.download_rounded), onPressed: () => showImportDialog(context)),
+            IconButton(tooltip: 'Import playlist', icon: const Icon(Icons.move_to_inbox_rounded), onPressed: () => showImportDialog(context)),
             IconButton(tooltip: 'New playlist', icon: const Icon(Icons.add_rounded, size: 28), onPressed: () => showCreatePlaylistDialog(context)),
           ]),
         ),
@@ -69,6 +70,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               key: ValueKey(_tab),
               child: switch (_tab) {
                 _Tab.playlists => _PlaylistsTab(lib: lib, onLiked: () => setState(() => _tab = _Tab.liked)),
+                _Tab.downloads => const DownloadsView(),
                 _Tab.liked => _LikedTab(lib: lib),
                 _Tab.artists => _ArtistsTab(lib: lib),
                 _Tab.history => _HistoryTab(lib: lib),
@@ -111,7 +113,7 @@ class _PlaylistsTab extends StatelessWidget {
             action: Row(mainAxisSize: MainAxisSize.min, children: [
               GradientButton(label: 'Create', icon: Icons.add_rounded, compact: true, onTap: () => showCreatePlaylistDialog(context)),
               const SizedBox(width: 10),
-              OutlinedButton.icon(onPressed: () => showImportDialog(context), icon: const Icon(Icons.download_rounded), label: const Text('Import')),
+              OutlinedButton.icon(onPressed: () => showImportDialog(context), icon: const Icon(Icons.move_to_inbox_rounded), label: const Text('Import')),
             ]),
           ),
         )
@@ -153,7 +155,10 @@ class _LikedTab extends StatelessWidget {
             child: PlayBar(
               onPlay: () => player.playTracks(songs, context: 'liked songs'),
               onShuffle: () => player.playTracks(songs, shuffleOn: true, context: 'liked songs'),
-              extra: [RoundIconButton(icon: Icons.ios_share_rounded, onTap: () => sharePlaylistGated(context, 'My liked songs', songs))],
+              extra: [
+                DownloadAllButton(tracks: songs),
+                RoundIconButton(icon: Icons.ios_share_rounded, onTap: () => sharePlaylistGated(context, 'My liked songs', songs)),
+              ],
             ),
           );
         }
@@ -299,7 +304,10 @@ class UserPlaylistScreen extends StatelessWidget {
           : PlayBar(
               onPlay: () => player.playTracks(tracks, context: p.name),
               onShuffle: () => player.playTracks(tracks, context: p.name, shuffleOn: true),
-              extra: [RoundIconButton(icon: Icons.ios_share_rounded, tooltip: 'Share', onTap: () => sharePlaylistGated(context, p.name, p.tracks))],
+              extra: [
+                DownloadAllButton(tracks: tracks),
+                RoundIconButton(icon: Icons.ios_share_rounded, tooltip: 'Share', onTap: () => sharePlaylistGated(context, p.name, p.tracks)),
+              ],
             ),
       slivers: [
         if (tracks.isEmpty)

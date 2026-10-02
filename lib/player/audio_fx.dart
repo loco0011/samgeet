@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
@@ -8,11 +9,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// A ready-made sound. [curve] is gains in dB from the lowest band to the
 /// highest; phones differ in band count, so it's stretched to fit.
+///
+/// The listener's own presets ([isMine]) also keep the loudness [boost] they
+/// were saved with; the built-in ones leave the boost alone.
 class EqPreset {
   final String id;
   final String label;
   final List<double> curve;
-  const EqPreset(this.id, this.label, this.curve);
+  final double? boost;
+  const EqPreset(this.id, this.label, this.curve, {this.boost});
+
+  static const minePrefix = 'my:';
+  bool get isMine => id.startsWith(minePrefix);
+
+  Map<String, dynamic> toJson() => {'id': id, 'label': label, 'curve': curve, 'boost': ?boost};
+
+  static EqPreset? fromJson(Object? j) {
+    if (j is! Map) return null;
+    final curve = [for (final v in (j['curve'] as List?) ?? const []) if (v is num) v.toDouble()];
+    final id = '${j['id'] ?? ''}', label = '${j['label'] ?? ''}'.trim();
+    if (!id.startsWith(minePrefix) || label.isEmpty || curve.isEmpty) return null;
+    return EqPreset(id, label, curve, boost: (j['boost'] as num?)?.toDouble());
+  }
 
   static const flat = EqPreset('flat', 'Flat', [0, 0, 0, 0, 0]);
   static const all = [
@@ -48,7 +66,17 @@ class AudioFx extends ChangeNotifier {
   AudioPipeline get pipeline => supported ? AudioPipeline(androidAudioEffects: [_loudness, _eq]) : AudioPipeline();
 
   bool enabled = false;
-  String preset = EqPreset.flat.id; // or 'custom'
+  String preset = EqPreset.flat.id; // or 'custom' (tuned by hand, not saved)
+
+  /// Sounds the listener saved under their own names (they sync with the account).
+  List<EqPreset> mine = const [];
+  static const maxMine = 20;
+  static const maxNameLength = 24;
+
+  List<EqPreset> get allPresets => [...EqPreset.all, ...mine];
+
+  /// What the header shows: the preset's name, or "Custom" for unsaved tuning.
+  String get presetLabel => allPresets.where((p) => p.id == preset).map((p) => p.label).firstOrNull ?? 'Custom';
   double boost = 0; // dB, 0..maxBoost
   static const maxBoost = 8.0;
 
@@ -83,6 +111,8 @@ class AudioFx extends ChangeNotifier {
     preset = p.getString('fx.preset') ?? EqPreset.flat.id;
     boost = (p.getDouble('fx.boost') ?? 0).clamp(0, maxBoost);
     _saved = [for (final s in p.getStringList('fx.gains') ?? const <String>[]) double.tryParse(s) ?? 0];
+    mine = decodeMine(p.getString('fx.mine'));
+    if (preset.startsWith(EqPreset.minePrefix) && !mine.any((m) => m.id == preset)) preset = 'custom'; // deleted on another phone
     await _applyEnabled();
     await _loudness.setTargetGain(boost);
     await _applyGains();
@@ -99,7 +129,7 @@ class AudioFx extends ChangeNotifier {
   }
 
   double _presetGain(int i, int n) =>
-      EqPreset.all.firstWhere((p) => p.id == preset, orElse: () => EqPreset.flat).gainAt(i, n);
+      allPresets.firstWhere((p) => p.id == preset, orElse: () => EqPreset.flat).gainAt(i, n);
 
   Future<void> _applyEnabled() async {
     await _eq.setEnabled(enabled);
@@ -126,6 +156,78 @@ class AudioFx extends ChangeNotifier {
       await b[i].setGain(p.gainAt(i, b.length).clamp(minDb, maxDb));
     }
     notifyListeners();
+    if (p.boost != null) await setBoost(p.boost!);
+  }
+
+  // ---------- the listener's own presets ----------
+  static List<EqPreset> decodeMine(String? raw) {
+    if (raw == null || raw.isEmpty) return const [];
+    try {
+      return [for (final j in jsonDecode(raw) as List) ?EqPreset.fromJson(j)];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static String encodeMine(List<EqPreset> list) => jsonEncode([for (final m in list) m.toJson()]);
+
+  static String _trimName(String name) {
+    final n = name.trim();
+    return n.length > maxNameLength ? n.substring(0, maxNameLength).trim() : n;
+  }
+
+  /// Is [name] free? [except] lets a preset keep its own name when renamed.
+  bool nameFree(String name, {String? except}) {
+    final n = _trimName(name).toLowerCase();
+    return n.isNotEmpty && !allPresets.any((p) => p.id != except && p.label.toLowerCase() == n);
+  }
+
+  bool get canSave => bands != null && mine.length < maxMine;
+
+  List<double> get _currentCurve => [for (final b in bands ?? const <AndroidEqualizerBand>[]) double.parse(b.gain.toStringAsFixed(2))];
+
+  /// Saves the sound as it is now (bands and loudness boost) under [name], and selects it.
+  /// Returns null when there's nothing to save yet (no song has played) or no room left.
+  Future<EqPreset?> saveMine(String name) async {
+    final curve = _currentCurve;
+    if (curve.isEmpty || mine.length >= maxMine || !nameFree(name)) return null;
+    final p = EqPreset('${EqPreset.minePrefix}${DateTime.now().millisecondsSinceEpoch}', _trimName(name), curve, boost: boost);
+    mine = [...mine, p];
+    preset = p.id;
+    if (!enabled) {
+      enabled = true;
+      await _applyEnabled();
+    }
+    await _storeMine();
+    return p;
+  }
+
+  /// Replaces a saved preset's sound with what is playing now.
+  Future<void> updateMine(String id) async {
+    final curve = _currentCurve;
+    if (curve.isEmpty) return;
+    mine = [for (final m in mine) m.id == id ? EqPreset(m.id, m.label, curve, boost: boost) : m];
+    preset = id;
+    await _storeMine();
+  }
+
+  Future<void> renameMine(String id, String name) async {
+    if (!nameFree(name, except: id)) return;
+    mine = [for (final m in mine) m.id == id ? EqPreset(m.id, _trimName(name), m.curve, boost: m.boost) : m];
+    await _storeMine();
+  }
+
+  /// Deletes a saved preset. If it was selected, the sound stays as unsaved tuning.
+  Future<void> deleteMine(String id) async {
+    mine = [for (final m in mine) if (m.id != id) m];
+    if (preset == id) preset = 'custom';
+    await _storeMine();
+  }
+
+  Future<void> _storeMine() async {
+    notifyListeners();
+    _save();
+    await _prefs?.setString('fx.mine', encodeMine(mine));
   }
 
   Future<void> setBand(int i, double db) async {

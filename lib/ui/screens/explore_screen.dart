@@ -9,7 +9,8 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/shelves.dart';
 
-/// Browse everything: moods, decades, Bengali corner, favourite singers, languages, genres, the world.
+/// Browse everything: moods, decades, Bengali corner, favourite singers, languages, Korean,
+/// classical, folk, genres, the world.
 class ExploreScreen extends StatelessWidget {
   const ExploreScreen({super.key});
 
@@ -47,7 +48,9 @@ class ExploreScreen extends StatelessWidget {
             const SizedBox(height: 10),
           ],
           group('india'),
+          group('korean'),
           group('classical'),
+          group('folk'),
           group('genre'),
           group('world'),
         ],

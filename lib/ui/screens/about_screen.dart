@@ -123,13 +123,20 @@ class AboutScreen extends StatelessWidget {
         card(
           Icons.lock_rounded,
           'Your data',
-          'As a guest, your playlists, favourites and history stay on this phone only. '
-          'If you sign in with an email and password, your library (playlists, liked songs, history, followed artists, '
-          'settings and profile) is saved to your account on Samgeet\'s server, so it comes back on any phone you sign in on. '
-          'Your password never leaves the phone and can\'t be reset. Profile photos stay on the phone. '
-          'Device details are kept only if you agreed to share them. '
-          'Sharing a song or playlist stores its details (or the playlist\'s name and song list) on the server to make the short link. '
-          'Signing out stops syncing on this phone; your account keeps your library.',
+          'Liking, downloading and sharing songs need an account (email and password). '
+          'Your library (playlists, liked songs, history, followed artists, settings, saved equalizer sounds and profile) '
+          'is saved to your account on Samgeet\'s server, so it comes back on any phone you sign in on. '
+          'Your password never leaves the phone and can\'t be reset. Profile photos stay on the phone.\n\n'
+          'Samgeet records how the app is used and sends it to its own server to improve suggestions and the app: '
+          'which songs you play and for how long, skips, likes, downloads, shares, searches, playlists you make, '
+          'the player look and other settings you change, when the app opens, and which messages and updates you open. '
+          'With it go your phone\'s make and model, Android version, app version, language, time zone and IP address. '
+          'It is linked to your account when you are signed in, and to this install (a random id) when you are not. '
+          'Your city is recorded only if you agreed to share device details. Nothing is sold or shared with advertisers.\n\n'
+          'Songs you download are kept privately inside the app on this phone: never uploaded, and deleted if you uninstall. '
+          'Sharing a song or playlist stores its details on the server to make the short link. '
+          'Signing out stops syncing on this phone; your account keeps your library. '
+          'Settings › Delete my account removes your account, its library and its listening data from the server.',
         ),
         card(
           Icons.gavel_rounded,

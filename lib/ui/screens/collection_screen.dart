@@ -8,6 +8,7 @@ import '../../player/player_controller.dart';
 import '../nav.dart';
 import '../widgets/common.dart';
 import '../widgets/detail_scaffold.dart';
+import '../widgets/download_widgets.dart';
 import '../widgets/track_widgets.dart';
 
 /// An album or a curated playlist from the catalogue.
@@ -61,6 +62,7 @@ class _CollectionScreenState extends State<CollectionScreen> {
                   onPlay: () => context.read<PlayerController>().playTracks(tracks, context: ctx),
                   onShuffle: () => context.read<PlayerController>().playTracks(tracks, context: ctx, shuffleOn: true, start: 0),
                   extra: [
+                    DownloadAllButton(tracks: tracks),
                     RoundIconButton(
                       icon: Icons.playlist_add_rounded,
                       tooltip: 'Save as playlist',

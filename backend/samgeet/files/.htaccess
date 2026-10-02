@@ -1,0 +1,9 @@
+# Uploaded APKs only. Nothing here ever runs as code.
+Options -Indexes -ExecCGI
+AddType application/vnd.android.package-archive .apk
+<FilesMatch "\.(?!apk$)[^.]+$">
+  Require all denied
+</FilesMatch>
+<FilesMatch "^\.htaccess$">
+  Require all denied
+</FilesMatch>

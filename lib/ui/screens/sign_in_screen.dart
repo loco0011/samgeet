@@ -18,6 +18,7 @@ import '../widgets/common.dart';
 import '../widgets/glass.dart';
 import '../widgets/profile_avatar.dart';
 import '../widgets/account_widgets.dart';
+import '../widgets/player_style_picker.dart';
 
 /// Palette colours can be deep; lift them so icons stay readable on the dark page.
 Color _lift(Color c) => Color.lerp(c, Colors.white, 0.55)!;
@@ -106,8 +107,11 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   // New here: email + password (the name is asked for if it's a new account).
-  // Editing: name + email; the password is only there while this phone isn't syncing yet.
-  bool get _valid => _email.text.trim().isNotEmpty && (_editing ? _name.text.trim().isNotEmpty : _pass.text.isNotEmpty);
+  // Editing: name + email, plus a password while this phone isn't signed in to an account yet.
+  bool get _valid =>
+      _email.text.trim().isNotEmpty &&
+      (!_editing || _name.text.trim().isNotEmpty) &&
+      (context.read<SyncService>().loggedIn || _pass.text.isNotEmpty);
 
   void _toggle(Set<String> set, String v) => setState(() => set.contains(v) ? set.remove(v) : set.add(v));
 
@@ -124,9 +128,9 @@ class _SignInScreenState extends State<SignInScreen> {
     final existing = lib.profile;
     final wasEditing = existing != null;
 
-    // With a password: sign in to the account if there is one (the library comes back), else make one.
+    // Sign in to the account if there is one (the library comes back), else make one.
     AccountCheck? account;
-    if (!sync.loggedIn && (_pass.text.isNotEmpty || !wasEditing)) {
+    if (!sync.loggedIn) {
       if (_pass.text.length < SyncService.minPasswordLength) {
         setState(() => _passError = 'At least ${SyncService.minPasswordLength} characters');
         return;
@@ -136,6 +140,7 @@ class _SignInScreenState extends State<SignInScreen> {
       if (!mounted) return;
       final problem = switch (account.state) {
         AccountState.wrongPassword => 'Wrong password for this email',
+        AccountState.blocked => 'This account is switched off. Contact Samgeet for help.',
         AccountState.offline => 'No internet. Connect to sign in.',
         AccountState.slowDown => 'Too many tries. Wait 10 minutes and try again.',
         AccountState.broken => 'Something went wrong. Try again in a bit.',
@@ -152,8 +157,8 @@ class _SignInScreenState extends State<SignInScreen> {
         await sync.join(account); // brings the library, profile included
         if (!mounted) return;
         if (lib.signedIn) {
-          Navigator.of(context).pop(true);
-          toast(context, 'Welcome back, ${lib.profile!.name}!');
+          lib.analytics?.log('sign_in');
+          _done(lib, 'Welcome back, ${lib.profile!.name}!');
           return;
         }
       }
@@ -164,6 +169,15 @@ class _SignInScreenState extends State<SignInScreen> {
         });
         return;
       }
+      if (account.state == AccountState.fresh && !await sync.register(account, _name.text.trim())) {
+        if (!mounted) return;
+        setState(() {
+          _saving = false;
+          _passError = 'Couldn\'t create your account. Check your connection and try again.';
+        });
+        return;
+      }
+      if (!mounted) return;
     }
 
     // Only look at the device (and ask for the location permission) if they opted in.
@@ -193,11 +207,28 @@ class _SignInScreenState extends State<SignInScreen> {
     if (_newPhoto != null && _newPhoto != profile.photoPath) _deleteFile(_newPhoto);
     if (account != null) {
       await lib.flush(); // so the new account starts with this profile
-      unawaited(sync.join(account));
+      await sync.adopt(account); // signed in from here on; the first sync runs in the background
+      unawaited(sync.sync());
+      lib.analytics?.log(account.state == AccountState.fresh ? 'sign_up' : 'sign_in');
     }
     if (!mounted) return;
-    Navigator.of(context).pop(true);
-    toast(context, wasEditing ? (account != null ? 'Profile saved. Your library is backed up now.' : 'Profile saved') : 'Welcome to Samgeet, ${profile.name}!');
+    if (account == null) {
+      Navigator.of(context).pop(true);
+      toast(context, 'Profile saved');
+      return;
+    }
+    _done(lib, wasEditing ? 'Signed in. Your library is backed up now.' : 'Welcome to Samgeet, ${profile.name}!');
+  }
+
+  /// Just signed in: close, say hello, and offer the player looks that come with an account.
+  void _done(LibraryStore lib, String message) {
+    final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    nav.pop(true);
+    messenger?.showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 2)));
+    Future.delayed(const Duration(milliseconds: 450), () {
+      if (nav.mounted) showPlayerStylePicker(nav.context, welcome: true);
+    });
   }
 
   @override
@@ -265,7 +296,13 @@ class _SignInScreenState extends State<SignInScreen> {
                 child: Column(children: [
                   _Perk(Icons.palette_rounded, 'Colours that follow the mood of your music'),
                   SizedBox(height: 12),
-                  _Perk(Icons.ios_share_rounded, 'Share your playlists with friends'),
+                  _Perk(Icons.download_for_offline_rounded, 'Download songs and listen without internet'),
+                  SizedBox(height: 12),
+                  _Perk(Icons.favorite_rounded, 'Like songs and keep them on every phone'),
+                  SizedBox(height: 12),
+                  _Perk(Icons.ios_share_rounded, 'Share songs and playlists with friends'),
+                  SizedBox(height: 12),
+                  _Perk(Icons.style_rounded, 'Pick your player look: Disc, Cover, Immersive or Minimal'),
                   SizedBox(height: 12),
                   _Perk(Icons.library_music_rounded, 'Playlists with unlimited songs (guests: ${LibraryStore.guestPlaylistLimit})'),
                   SizedBox(height: 12),
@@ -291,9 +328,9 @@ class _SignInScreenState extends State<SignInScreen> {
                 const SizedBox(height: 12),
                 PasswordField(
                   controller: _pass,
-                  label: editing ? 'Password (optional)' : 'Password',
+                  label: 'Password',
                   helper: editing
-                      ? 'Add one to back up your library and get it on other phones.'
+                      ? 'Add one to sign in: it backs up your library and unlocks downloads, likes and sharing.'
                       : 'Been here before? Your playlists and favourites come back. New? This creates your account.',
                   error: _passError,
                   onChanged: (_) => setState(() => _passError = null),
@@ -394,7 +431,8 @@ class _SignInScreenState extends State<SignInScreen> {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'Your profile, playlists, favourites, history and settings are saved on this phone and synced to your account on Samgeet\'s server. Sign in with the same email and password on any phone to get them. Your password never leaves the phone and can\'t be reset, so remember it. Uploaded photos stay on this phone.',
+                    'Your profile, playlists, favourites, history and settings are saved on this phone and synced to your account on Samgeet\'s server. Sign in with the same email and password on any phone to get them. Your password never leaves the phone and can\'t be reset, so remember it. Uploaded photos stay on this phone.\n\n'
+                    'Samgeet also records how the app is used (songs played and for how long, skips, likes, downloads, shares, searches, your phone model and app version) and links it to your account, to improve suggestions and the app. Details in Settings › About.',
                     style: TextStyle(color: AppColors.muted, fontSize: 12, height: 1.4),
                   ),
                 ),

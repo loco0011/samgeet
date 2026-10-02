@@ -6,10 +6,14 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../engine/taste_profile.dart';
+import 'analytics.dart';
+import 'player_style.dart';
 import 'sync_service.dart';
 import 'cloud_service.dart';
 import 'profile.dart';
 import 'track.dart';
+
+export 'player_style.dart';
 
 class UserPlaylist {
   final String id;
@@ -66,6 +70,12 @@ class LibraryStore extends ChangeNotifier {
   /// Keeps this library the same on every phone logged in to the account. Null in tests.
   SyncService? sync;
 
+  /// Listening data for Samgeet's server. Null in tests.
+  Analytics? analytics;
+
+  /// How the full-screen player looks (see [PlayerStyle]); a perk for signed-in listeners.
+  PlayerStyle playerStyle = PlayerStyle.disc;
+
   /// Which dark accent style the app wears when a song has no clear mood.
   String accent = 'ember';
 
@@ -116,6 +126,7 @@ class LibraryStore extends ChangeNotifier {
     accent = _prefs.getString('accent') ?? 'ember';
     moodColors = _prefs.getBool('moodColors') ?? true;
     themeMood = _prefs.getString('themeMood');
+    playerStyle = PlayerStyle.byId(_prefs.getString('playerStyle'));
     try {
       final p = _prefs.getString('profile');
       if (p != null) profile = Profile.fromJson(Map<String, dynamic>.from(jsonDecode(p)));
@@ -176,6 +187,7 @@ class LibraryStore extends ChangeNotifier {
           await _prefs.setStringList('languages', languages);
           await _prefs.setString('accent', accent);
           await _prefs.setBool('moodColors', moodColors);
+          await _prefs.setString('playerStyle', playerStyle.id);
           if (themeMood == null) {
             await _prefs.remove('themeMood');
           } else {
@@ -197,10 +209,12 @@ class LibraryStore extends ChangeNotifier {
     if (_favIds.remove(t.id)) {
       favorites.removeWhere((x) => x.id == t.id);
       taste.record(t, TasteEvent.unliked);
+      analytics?.log('unlike', track: t);
     } else {
       _favIds.add(t.id);
       favorites.insert(0, t);
       taste.record(t, TasteEvent.liked);
+      analytics?.log('like', track: t);
     }
     _touch('taste');
     _changed('favorites');
@@ -215,6 +229,7 @@ class LibraryStore extends ChangeNotifier {
     );
     playlists.insert(0, p);
     _changed('playlists');
+    analytics?.log('playlist_create', value: p.name, meta: {'songs': p.tracks.length});
     return p;
   }
 
@@ -239,6 +254,7 @@ class LibraryStore extends ChangeNotifier {
       if (p.tracks.any((x) => x.id == t.id)) continue;
       p.tracks.add(t);
       taste.record(t, TasteEvent.addedToPlaylist);
+      analytics?.log('playlist_add', track: t, value: p.name);
       added++;
     }
     if (added > 0) {
@@ -304,6 +320,7 @@ class LibraryStore extends ChangeNotifier {
   void addSearch(String q) {
     final s = q.trim();
     if (s.isEmpty) return;
+    analytics?.log('search', value: s);
     recentSearches.remove(s);
     recentSearches.insert(0, s);
     if (recentSearches.length > 12) recentSearches.removeLast();
@@ -326,8 +343,21 @@ class LibraryStore extends ChangeNotifier {
     _changed('settings');
   }
 
+  void setPlayerStyle(PlayerStyle s) {
+    if (playerStyle == s) return;
+    playerStyle = s;
+    _changed('settings');
+    analytics?.log('player_style', value: s.id);
+    final p = profile, c = cloud;
+    if (p != null && c != null) unawaited(c.saveProfile(p, playerStyle: s.id));
+  }
+
   // ---------- profile ----------
+  /// Has a profile on this phone. Downloads, likes and sharing need [hasAccount] as well.
   bool get signedIn => profile != null;
+
+  /// Signed in to a Samgeet account (email + password), so the server knows who this is.
+  bool get hasAccount => signedIn && (sync?.loggedIn ?? true);
 
   /// Can a playlist hold [count] songs? Guests are capped, signed-in users are not.
   bool canHold(int count) => signedIn || count <= guestPlaylistLimit;
@@ -349,11 +379,15 @@ class LibraryStore extends ChangeNotifier {
     _touch('settings');
     _changed('profile');
     final c = cloud;
-    if (c != null) unawaited(c.saveProfile(p));
+    if (c != null) unawaited(c.saveProfile(p, playerStyle: playerStyle.id));
+    // Device model and city, only for listeners who opted in on the sign-in page.
+    if (p.shareDeviceInfo && p.device != null) analytics?.log('device_info', meta: p.device!.toJson());
   }
 
   /// Signs out on this phone. Syncing stops first, so the account (and other phones) keep the profile.
   Future<void> signOut() async {
+    analytics?.log('sign_out');
+    await analytics?.flush(); // while the session still says who this was
     await sync?.logOut();
     final photo = profile?.photoPath; // the uploaded picture goes with the profile
     if (photo != null) File(photo).delete().catchError((_) => File(photo));

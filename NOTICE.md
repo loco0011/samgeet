@@ -25,15 +25,27 @@ catalogue can change at any time.
 
 ## Privacy
 For guests, playlists, favourites and listening history are stored on the user's own device
-only. When a user signs in with an email and password, their library (playlists, favourites,
-listening history, followed artists, recent searches, taste profile, settings and profile) is
+only. Songs a user downloads for offline listening are saved, with their covers, in the app's
+private storage on that device only; they are never uploaded, are not part of the phone's cloud
+backup, and are deleted when the app is uninstalled. When a user signs in with an email and
+password, their library (playlists, favourites, listening history, followed artists, recent
+searches, taste profile, settings including saved equalizer sounds, and profile) is
 saved on the author's server so it can be restored on any device they sign in on. The password
 never leaves the device: it is turned into an account key there, and the server stores only a
 hash of that key and of the email. The library is stored compressed but not encrypted. Uploaded
-profile photos are not uploaded. Device details and the request's IP address are kept only if
-the user opted in. Signing out stops syncing on that device; the account's library stays on the
-server. Shared songs and playlists get a short link, for which the server stores the song's
-details or the playlist's name and song list.
+profile photos are not uploaded. Liking, downloading and sharing songs require an account.
+
+From version 1.4.0 the app also records how it is used and sends it to the author's server for
+analysis: songs played (with title, singers, album and language) and how long each played, skips,
+likes, downloads, shares, searches, playlists made, the player look and other settings changed,
+app opens, and which in-app messages and updates were opened. With each batch go the phone's
+make and model, Android version, app version, language, time zone and IP address. This is linked
+to the account when signed in, and otherwise to a random id made on that install. The city-level
+location is kept only if the user opted in. The data is used to improve recommendations and the
+app; it is not sold or shared with advertisers. Settings › Delete my account removes the account,
+its library and its listening data from the server. Signing out stops syncing on that device; the
+account's library stays on the server. Shared songs and playlists get a short link, for which the
+server stores the song's details or the playlist's name and song list.
 
 ## No warranty
 The software is provided "as is", without warranty of any kind. The author is not liable for

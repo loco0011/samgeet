@@ -7,7 +7,6 @@ import 'package:just_audio/just_audio.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/library_store.dart';
-import '../../data/share_service.dart';
 import '../../data/track.dart';
 import '../../player/player_controller.dart';
 import '../nav.dart';
@@ -16,7 +15,9 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/disc_player.dart';
 import '../widgets/dominant_color.dart';
+import '../../data/download_service.dart';
 import '../widgets/player_sheets.dart';
+import '../widgets/player_style_picker.dart';
 import '../widgets/track_widgets.dart';
 
 class NowPlayingScreen extends StatelessWidget {
@@ -44,19 +45,15 @@ class NowPlayingScreen extends StatelessWidget {
           final moodC = context.watch<MoodController>();
           final base = animated ?? color;
           final accent = !moodC.themed ? base : Color.lerp(base, moodC.palette.colors[1], 0.55)!;
+          final style = context.select<LibraryStore, PlayerStyle>((l) => l.hasAccount ? l.playerStyle : PlayerStyle.disc);
           return _SwipeDownToMinimize(
               child: Scaffold(
                 // Solid, so nothing from the page underneath shows through the player.
                 backgroundColor: AppColors.bg,
-            body: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [accent.withValues(alpha: 0.62), Color.lerp(accent, AppColors.bg, 0.86)!, AppColors.bg],
-                  stops: const [0, 0.45, 0.9],
-                ),
-              ),
+            body: _Backdrop(
+              style: style,
+              track: track,
+              accent: accent,
               child: SafeArea(
                 child: LayoutBuilder(builder: (context, box) {
                   final landscape = box.maxWidth > box.maxHeight;
@@ -68,7 +65,13 @@ class NowPlayingScreen extends StatelessWidget {
                       _TopBar(track: track),
                       Expanded(
                         child: Row(children: [
-                          Expanded(child: Center(child: DiscPlayer(player: player, track: track, size: artSize, glow: accent))),
+                          Expanded(
+                            child: Center(
+                              child: style == PlayerStyle.disc
+                                  ? DiscPlayer(player: player, track: track, size: artSize, glow: accent)
+                                  : _ArtCard(player: player, track: track, size: artSize - 30, glow: accent),
+                            ),
+                          ),
                           Expanded(
                             child: Center(
                               child: SingleChildScrollView(
@@ -76,6 +79,7 @@ class NowPlayingScreen extends StatelessWidget {
                                   constraints: const BoxConstraints(maxWidth: 520),
                                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                                     _TitleRow(track: track),
+                                    if (style != PlayerStyle.disc) ...[const SizedBox(height: 10), _SeekBar(player: player, track: track)],
                                     const SizedBox(height: 14),
                                     _Controls(player: player),
                                     const SizedBox(height: 12),
@@ -99,19 +103,43 @@ class NowPlayingScreen extends StatelessWidget {
                         Expanded(
                           child: LayoutBuilder(builder: (context, inner) {
                             final artSize = math.min(box.maxWidth - 40, math.max(120.0, math.min(inner.maxHeight * 0.5 - 36, 420.0)));
+                            final children = switch (style) {
+                              PlayerStyle.disc => [
+                                  DiscPlayer(player: player, track: track, size: artSize, glow: accent),
+                                  _TitleRow(track: track),
+                                  _Controls(player: player),
+                                  _ActionRow(player: player, track: track),
+                                ],
+                              PlayerStyle.cover => [
+                                  _ArtCard(player: player, track: track, size: math.min(box.maxWidth - 48, artSize + 24), glow: accent),
+                                  Column(children: [_TitleRow(track: track), const SizedBox(height: 12), _SeekBar(player: player, track: track)]),
+                                  _Controls(player: player),
+                                  _ActionRow(player: player, track: track),
+                                ],
+                              PlayerStyle.immersive => [
+                                  _ArtCard(player: player, track: track, size: artSize * 0.86, glow: accent, radius: 26),
+                                  _GlassPanel(children: [
+                                    _TitleRow(track: track),
+                                    const SizedBox(height: 10),
+                                    _SeekBar(player: player, track: track),
+                                    const SizedBox(height: 6),
+                                    _Controls(player: player),
+                                    const SizedBox(height: 10),
+                                    _ActionRow(player: player, track: track),
+                                  ]),
+                                ],
+                              PlayerStyle.minimal => [
+                                  _MinimalHeader(player: player, track: track),
+                                  _SeekBar(player: player, track: track, thin: true),
+                                  _Controls(player: player),
+                                  _ActionRow(player: player, track: track),
+                                ],
+                            };
                             return SingleChildScrollView(
                               physics: const ClampingScrollPhysics(),
                               child: ConstrainedBox(
                                 constraints: BoxConstraints(minHeight: inner.maxHeight),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                  children: [
-                                    DiscPlayer(player: player, track: track, size: artSize, glow: accent),
-                                    _TitleRow(track: track),
-                                    _Controls(player: player),
-                                    _ActionRow(player: player, track: track),
-                                  ],
-                                ),
+                                child: Column(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: children),
                               ),
                             );
                           }),
@@ -154,6 +182,7 @@ class _TopBar extends StatelessWidget {
             ),
           ]),
         ),
+        IconButton(icon: const Icon(Icons.style_outlined), tooltip: 'Player look', onPressed: () => showPlayerStylePicker(context)),
         IconButton(icon: const Icon(Icons.more_vert_rounded), onPressed: () => showTrackMenu(context, track)),
       ]),
     );
@@ -216,7 +245,7 @@ class _TitleRow extends StatelessWidget {
         ),
         IconButton(
           iconSize: 30,
-          onPressed: () => lib.toggleFavorite(track),
+          onPressed: () => toggleLike(context, track),
           icon: AnimatedSwitcher(
             duration: const Duration(milliseconds: 350),
             transitionBuilder: (c, a) => ScaleTransition(scale: CurvedAnimation(parent: a, curve: Curves.elasticOut), child: c),
@@ -323,38 +352,310 @@ class _ActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final sleepOn = player.hasSleepTimer;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
         _Action(icon: Icons.bedtime_outlined, label: 'Sleep', active: sleepOn, onTap: () => showSleepSheet(context)),
         ListenableBuilder(
           listenable: player.fx,
           builder: (context, _) => _Action(icon: Icons.equalizer_rounded, label: 'Sound', active: player.fx.enabled, onTap: () => showEqualizerSheet(context)),
         ),
+        _DownloadAction(track: track),
         _Action(icon: Icons.playlist_add_rounded, label: 'Playlist', onTap: () => showPlaylistPicker(context, [track])),
-        _Action(icon: Icons.ios_share_rounded, label: 'Share', onTap: () => ShareService.shareTrack(track)),
+        _Action(icon: Icons.ios_share_rounded, label: 'Share', onTap: () => shareTrackGated(context, track)),
         _Action(icon: Icons.queue_music_rounded, label: 'Queue', onTap: () => showQueueSheet(context)),
       ]),
     );
   }
 }
 
+/// Download from the player (needs an account): shows progress, then a tick once saved.
+class _DownloadAction extends StatelessWidget {
+  final Track track;
+  const _DownloadAction({required this.track});
+
+  @override
+  Widget build(BuildContext context) {
+    final (state, progress) = context.select<DownloadService, (DownloadState, double?)>((d) => (d.stateOf(track.id), d.progressOf(track.id)));
+    return switch (state) {
+      DownloadState.done => _Action(
+          icon: Icons.download_done_rounded,
+          label: 'Saved',
+          active: true,
+          onTap: () => toast(context, 'Saved on this phone. It plays without internet.'),
+        ),
+      DownloadState.downloading || DownloadState.queued => _Action(
+          label: 'Saving',
+          active: true,
+          iconWidget: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.4, value: (progress ?? 0) <= 0 ? null : progress, color: AppColors.pink, backgroundColor: Colors.white12),
+          ),
+          onTap: () => toast(context, 'Downloading… Watch it in Library › Downloads'),
+        ),
+      _ => _Action(
+          icon: Icons.download_rounded,
+          label: 'Download',
+          onTap: () async {
+            if (await downloadGated(context, [track]) > 0 && context.mounted) toast(context, 'Downloading "${track.title}" for offline listening');
+          },
+        ),
+    };
+  }
+}
+
+/// The page behind the player: the album colour fading to black, or for the Immersive look the
+/// album art itself, blurred, filling the screen.
+class _Backdrop extends StatelessWidget {
+  final PlayerStyle style;
+  final Track track;
+  final Color accent;
+  final Widget child;
+  const _Backdrop({required this.style, required this.track, required this.accent, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final gradient = Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: style == PlayerStyle.minimal
+              ? [accent.withValues(alpha: 0.22), AppColors.bg, AppColors.bg]
+              : [accent.withValues(alpha: 0.62), Color.lerp(accent, AppColors.bg, 0.86)!, AppColors.bg],
+          stops: const [0, 0.45, 0.9],
+        ),
+      ),
+      child: child,
+    );
+    if (style != PlayerStyle.immersive) return gradient;
+    return Stack(fit: StackFit.expand, children: [
+      AnimatedSwitcher(
+        duration: const Duration(milliseconds: 600),
+        child: ImageFiltered(
+          key: ValueKey(track.id),
+          imageFilter: ui.ImageFilter.blur(sigmaX: 46, sigmaY: 46, tileMode: TileMode.decal),
+          child: Transform.scale(scale: 1.3, child: Artwork(track.art(500), radius: 0, cacheSize: 300)),
+        ),
+      ),
+      DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.black.withValues(alpha: 0.25), Colors.black.withValues(alpha: 0.45), Colors.black.withValues(alpha: 0.85)],
+          ),
+        ),
+      ),
+      child,
+    ]);
+  }
+}
+
+/// Square album art with a soft glow. Swipe it sideways to skip.
+class _ArtCard extends StatelessWidget {
+  final PlayerController player;
+  final Track track;
+  final double size;
+  final Color glow;
+  final double radius;
+  const _ArtCard({required this.player, required this.track, required this.size, required this.glow, this.radius = 22});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onHorizontalDragEnd: (d) {
+        final v = d.primaryVelocity ?? 0;
+        if (v < -300) player.next();
+        if (v > 300) player.previous();
+      },
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 350),
+        transitionBuilder: (c, a) => FadeTransition(opacity: a, child: ScaleTransition(scale: Tween(begin: 0.94, end: 1.0).animate(a), child: c)),
+        child: Container(
+          key: ValueKey(track.id),
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius),
+            boxShadow: [BoxShadow(color: glow.withValues(alpha: 0.45), blurRadius: 40, spreadRadius: 2, offset: const Offset(0, 14))],
+          ),
+          child: Artwork(track.art(500), size: size, radius: radius, cacheSize: 700),
+        ),
+      ),
+    );
+  }
+}
+
+String _clock(Duration d) => '${d.inMinutes}:${d.inSeconds.remainder(60).toString().padLeft(2, '0')}';
+
+/// A straight progress bar with times, for the looks without the disc's seek ring.
+class _SeekBar extends StatefulWidget {
+  final PlayerController player;
+  final Track track;
+  final bool thin;
+  const _SeekBar({required this.player, required this.track, this.thin = false});
+
+  @override
+  State<_SeekBar> createState() => _SeekBarState();
+}
+
+class _SeekBarState extends State<_SeekBar> {
+  double? _drag; // 0..1 while dragging
+
+  @override
+  Widget build(BuildContext context) {
+    final mood = moodPalette(context);
+    return StreamBuilder<Duration>(
+      stream: widget.player.player.positionStream,
+      builder: (context, snap) {
+        final total = widget.player.player.duration ?? Duration(seconds: widget.track.durationSec);
+        final pos = snap.data ?? Duration.zero;
+        final ms = total.inMilliseconds;
+        final frac = _drag ?? (ms == 0 ? 0.0 : (pos.inMilliseconds / ms).clamp(0.0, 1.0));
+        final shown = _drag != null ? Duration(milliseconds: (ms * _drag!).round()) : pos;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Column(children: [
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: widget.thin ? 2 : 4,
+                thumbShape: RoundSliderThumbShape(enabledThumbRadius: widget.thin ? 5 : 7),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+                activeTrackColor: widget.thin ? Colors.white : mood.light,
+                inactiveTrackColor: Colors.white24,
+                thumbColor: Colors.white,
+                overlayColor: Colors.white24,
+              ),
+              child: Slider(
+                value: frac.toDouble(),
+                onChangeStart: (v) {
+                  DiscPlayer.scrubbing.value = true;
+                  setState(() => _drag = v);
+                },
+                onChanged: (v) => setState(() => _drag = v),
+                onChangeEnd: (v) {
+                  DiscPlayer.scrubbing.value = false;
+                  setState(() => _drag = null);
+                  if (ms > 0) widget.player.seek(Duration(milliseconds: (ms * v).round()));
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(children: [
+                Text(_clock(shown), style: const TextStyle(fontSize: 12, color: Colors.white70, fontFeatures: [FontFeature.tabularFigures()])),
+                const Spacer(),
+                Text(_clock(total), style: const TextStyle(fontSize: 12, color: Colors.white70, fontFeatures: [FontFeature.tabularFigures()])),
+              ]),
+            ),
+          ]),
+        );
+      },
+    );
+  }
+}
+
+/// Frosted panel that holds the controls in the Immersive look.
+class _GlassPanel extends StatelessWidget {
+  final List<Widget> children;
+  const _GlassPanel({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(0, 18, 0, 14),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: children),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The Minimal look's top half: a small spinning-free cover and the title set big.
+class _MinimalHeader extends StatelessWidget {
+  final PlayerController player;
+  final Track track;
+  const _MinimalHeader({required this.player, required this.track});
+
+  @override
+  Widget build(BuildContext context) {
+    final lib = context.watch<LibraryStore>();
+    final fav = lib.isFavorite(track.id);
+    final mood = moodPalette(context);
+    final artist = track.artists.where((a) => a.id.isNotEmpty).firstOrNull;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 28),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: Column(key: ValueKey(track.id), crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Artwork(track.art(150), size: 54, circle: true, cacheSize: 160),
+            const Spacer(),
+            IconButton(
+              iconSize: 30,
+              onPressed: () => toggleLike(context, track),
+              icon: Icon(fav ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: fav ? AppColors.pink : Colors.white),
+            ),
+          ]),
+          const SizedBox(height: 28),
+          Text(
+            track.title,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontFamily: kDisplay, fontSize: 38, height: 1.05, fontWeight: FontWeight.w800, letterSpacing: -1.4),
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: artist == null
+                ? null
+                : () {
+                    Navigator.of(context).pop();
+                    openArtist(context, artist);
+                  },
+            child: Text(track.artistLine, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 17, color: mood.light, fontWeight: FontWeight.w600)),
+          ),
+          if (track.album.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(track.album, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5, color: AppColors.muted)),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
 class _Action extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+  final Widget? iconWidget; // instead of [icon], e.g. a progress ring
   final String label;
   final bool active;
   final VoidCallback onTap;
-  const _Action({required this.icon, required this.label, required this.onTap, this.active = false});
+  const _Action({this.icon, this.iconWidget, required this.label, required this.onTap, this.active = false});
 
   @override
   Widget build(BuildContext context) {
     return Pressable(
       onTap: onTap,
       child: SizedBox(
-        width: 56,
+        width: 54,
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 24, color: active ? AppColors.pink : Colors.white.withValues(alpha: 0.85)),
+          SizedBox(height: 24, child: Center(child: iconWidget ?? Icon(icon, size: 24, color: active ? AppColors.pink : Colors.white.withValues(alpha: 0.85)))),
           const SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? AppColors.pink : Colors.white60)),
+          Text(label, maxLines: 1, overflow: TextOverflow.visible, softWrap: false,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? AppColors.pink : Colors.white60)),
         ]),
       ),
     );

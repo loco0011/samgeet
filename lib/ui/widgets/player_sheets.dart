@@ -122,7 +122,9 @@ class _EqualizerSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mood = moodPalette(context);
-    final presetLabel = EqPreset.all.where((p) => p.id == fx.preset).map((p) => p.label).firstOrNull ?? 'Custom';
+    final unsaved = fx.preset == 'custom';
+    final presetLabel = unsaved ? 'Custom · not saved' : fx.presetLabel;
+    final presets = fx.allPresets;
     return SafeArea(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         _grabber(),
@@ -137,6 +139,8 @@ class _EqualizerSheet extends StatelessWidget {
               ]),
             ),
             if (AudioFx.supported) ...[
+              if (unsaved && fx.enabled)
+                IconButton(tooltip: 'Save this sound', onPressed: () => _saveAs(context, fx), icon: Icon(Icons.bookmark_add_rounded, color: mood.light)),
               IconButton(tooltip: 'Reset', onPressed: fx.reset, icon: const Icon(Icons.restart_alt_rounded, color: AppColors.muted)),
               Switch(value: fx.enabled, onChanged: fx.setEnabled, activeTrackColor: mood.accent, activeThumbColor: Colors.white),
             ],
@@ -153,13 +157,33 @@ class _EqualizerSheet extends StatelessWidget {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-              itemCount: EqPreset.all.length,
+              itemCount: presets.length + 1,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) {
-                final p = EqPreset.all[i];
+                // Last chip: save the current sound under a name.
+                if (i == presets.length) {
+                  return Pressable(
+                    onTap: () => _saveAs(context, fx),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: unsaved && fx.enabled ? mood.light : AppColors.outline),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Icons.add_rounded, size: 18, color: mood.light),
+                        const SizedBox(width: 4),
+                        Text('Save', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: mood.light)),
+                      ]),
+                    ),
+                  );
+                }
+                final p = presets[i];
                 final on = fx.enabled && fx.preset == p.id;
                 return Pressable(
                   onTap: () => fx.applyPreset(p),
+                  onLongPress: p.isMine ? () => _presetMenu(context, fx, p) : null,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -170,12 +194,26 @@ class _EqualizerSheet extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: on ? Colors.transparent : AppColors.outline),
                     ),
-                    child: Text(p.label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: on ? Colors.white : Colors.white70)),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (p.isMine) ...[
+                        Icon(Icons.bookmark_rounded, size: 14, color: on ? Colors.white : mood.light),
+                        const SizedBox(width: 5),
+                      ],
+                      Text(p.label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: on ? Colors.white : Colors.white70)),
+                    ]),
                   ),
                 );
               },
             ),
           ),
+          if (fx.mine.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 6, 20, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Long-press one of your sounds to rename, update or delete it', style: TextStyle(color: AppColors.muted, fontSize: 11.5)),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             child: fx.bands == null
@@ -215,6 +253,113 @@ class _EqualizerSheet extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// Asks for a name and saves the current sound as one of the listener's presets.
+Future<void> _saveAs(BuildContext context, AudioFx fx) async {
+  if (fx.bands == null) {
+    _eqToast(context, 'Play a song first, then tune and save your sound');
+    return;
+  }
+  if (fx.mine.length >= AudioFx.maxMine) {
+    _eqToast(context, 'You can keep ${AudioFx.maxMine} sounds. Delete one to save another.');
+    return;
+  }
+  final name = await _askPresetName(context, fx, title: 'Save this sound', action: 'Save', initial: 'My sound ${fx.mine.length + 1}');
+  if (name == null) return;
+  final saved = await fx.saveMine(name);
+  if (context.mounted && saved != null) _eqToast(context, 'Saved "${saved.label}"');
+}
+
+Future<void> _presetMenu(BuildContext context, AudioFx fx, EqPreset p) {
+  return showModalBottomSheet<void>(
+    context: context,
+    useRootNavigator: true,
+    builder: (sheet) => SafeArea(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        _grabber(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
+          child: Align(alignment: Alignment.centerLeft, child: Text(p.label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20))),
+        ),
+        ListTile(
+          leading: const Icon(Icons.edit_rounded),
+          title: const Text('Rename', style: TextStyle(fontWeight: FontWeight.w600)),
+          onTap: () async {
+            Navigator.of(sheet).pop();
+            final name = await _askPresetName(context, fx, title: 'Rename sound', action: 'Rename', initial: p.label, except: p.id);
+            if (name != null) await fx.renameMine(p.id, name);
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.save_as_rounded),
+          title: const Text('Update to the current sound', style: TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: const Text('Keeps the name, saves the bands and boost as they are now', style: TextStyle(color: AppColors.muted)),
+          onTap: () async {
+            Navigator.of(sheet).pop();
+            if (fx.bands == null) return _eqToast(context, 'Play a song first');
+            await fx.updateMine(p.id);
+            if (context.mounted) _eqToast(context, 'Updated "${p.label}"');
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+          title: const Text('Delete', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.redAccent)),
+          onTap: () async {
+            Navigator.of(sheet).pop();
+            await fx.deleteMine(p.id);
+            if (context.mounted) _eqToast(context, 'Deleted "${p.label}"');
+          },
+        ),
+        const SizedBox(height: 8),
+      ]),
+    ),
+  );
+}
+
+/// A name for a preset: not empty, not already used, at most [AudioFx.maxNameLength] characters.
+Future<String?> _askPresetName(BuildContext context, AudioFx fx, {required String title, required String action, String initial = '', String? except}) {
+  final controller = TextEditingController(text: initial)..selection = TextSelection(baseOffset: 0, extentOffset: initial.length);
+  String? error;
+  return showDialog<String>(
+    context: context,
+    useRootNavigator: true,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setState) {
+        void submit() {
+          final name = controller.text.trim();
+          if (name.isEmpty) return setState(() => error = 'Give it a name');
+          if (!fx.nameFree(name, except: except)) return setState(() => error = 'You already have a sound called that');
+          Navigator.of(ctx).pop(name);
+        }
+
+        return AlertDialog(
+          title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: AudioFx.maxNameLength,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(hintText: 'e.g. Car bass, Night vocals', errorText: error),
+            onChanged: (_) {
+              if (error != null) setState(() => error = null);
+            },
+            onSubmitted: (_) => submit(),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+            FilledButton(style: FilledButton.styleFrom(backgroundColor: AppColors.pink), onPressed: submit, child: Text(action)),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+void _eqToast(BuildContext context, String message) {
+  final m = ScaffoldMessenger.maybeOf(context);
+  m?.hideCurrentSnackBar();
+  m?.showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 2)));
 }
 
 /// The bands drawn as one smooth curve; drag anywhere near a band to move it.

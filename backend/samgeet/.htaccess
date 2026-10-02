@@ -1,0 +1,16 @@
+Options -Indexes
+DirectoryIndex index.php
+
+# Settings and shared code are never served.
+<FilesMatch "^(config\.php|config\.sample\.php|schema\.sql|.*\.md)$">
+  Require all denied
+</FilesMatch>
+
+RewriteEngine On
+RewriteRule ^lib/ - [F,L]
+
+<IfModule mod_headers.c>
+  Header always set X-Robots-Tag "noindex, nofollow"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Strict-Transport-Security "max-age=31536000"
+</IfModule>

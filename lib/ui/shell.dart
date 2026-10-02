@@ -3,8 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../data/app_config.dart';
 import '../data/deep_link.dart';
+import '../data/download_service.dart';
 import '../data/saavn_api.dart';
 import '../player/player_controller.dart';
 import 'nav.dart';
@@ -35,6 +39,7 @@ class _AppShellState extends State<AppShell> {
   final _keys = List.generate(4, (_) => GlobalKey<NavigatorState>());
   int _index = 0;
   StreamSubscription<String>? _toasts;
+  StreamSubscription<String>? _downloadToasts;
   final _deepLinks = DeepLinks();
   StreamSubscription<String>? _linkSub;
 
@@ -75,18 +80,73 @@ class _AppShellState extends State<AppShell> {
     _toasts = context.read<PlayerController>().messages.listen((m) {
       if (mounted) toast(context, m);
     });
+    _downloadToasts = context.read<DownloadService>().messages.listen((m) {
+      if (mounted) toast(context, m);
+    });
     // Opened from a shared song/playlist link: at launch, or while the app was already running.
     _linkSub = _deepLinks.links.listen(_openLink);
     _deepLinks.initial().then((l) {
       if (l != null) _openLink(l);
     });
-    // Once the home screen has settled: a newer release on GitHub? If not, and this version hasn't
-    // asked yet, invite a guest to sign in (or an old sign-in to add a password). One popup at a time.
-    Future.delayed(const Duration(seconds: 4), () async {
+    // Messages from the admin panel: popups while the app is open, and taps on phone notifications.
+    final config = context.read<AppConfig>();
+    _popupSub = config.popups.listen((a) => _queueDialog(() => showAnnouncement(context, a, onAction: _runAction)));
+    _tapSub = config.taps.listen(_runAction);
+    // Once the home screen has settled: a newer version from the admin panel? If not, and this
+    // version hasn't asked yet, invite a guest to sign in (or an old sign-in to add a password).
+    // Messages that arrive meanwhile wait their turn: one popup at a time.
+    Future.delayed(const Duration(seconds: 4), () {
       if (!mounted) return;
-      final updating = await checkForUpdate(context);
-      if (!updating && mounted) await maybeShowSignInNudge(context);
+      _queueDialog(() async {
+        await config.refresh();
+        if (!mounted) return;
+        final updating = await checkForUpdate(context);
+        if (!updating && mounted) await maybeShowSignInNudge(context);
+        if (mounted) await _askNotificationsOnce(config);
+      });
     });
+  }
+
+  StreamSubscription<Announcement>? _popupSub;
+  StreamSubscription<Announcement>? _tapSub;
+  Future<void> _dialogs = Future.value();
+
+  /// Runs [show] after any popup already on screen has closed.
+  void _queueDialog(Future<void> Function() show) {
+    _dialogs = _dialogs.then((_) async {
+      try {
+        if (mounted) await show();
+      } catch (e) {
+        debugPrint('popup failed: $e');
+      }
+    });
+  }
+
+  /// Android 13+ asks before an app may post notifications; ask once, after the first popups.
+  Future<void> _askNotificationsOnce(AppConfig config) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('notifAsked') ?? false) return;
+    await prefs.setBool('notifAsked', true);
+    await config.notifier.askPermission();
+  }
+
+  /// What a message's button does.
+  Future<void> _runAction(Announcement a) async {
+    if (!mounted) return;
+    switch (a.action) {
+      case 'update':
+        await checkForUpdate(context, manual: true);
+      case 'url':
+        final u = Uri.tryParse(a.actionValue);
+        if (u != null && u.scheme == 'https') await launchUrl(u, mode: LaunchMode.externalApplication).catchError((_) => false);
+      case 'search':
+        if (a.actionValue.isEmpty) return;
+        _select(2);
+        SearchScreen.request.value = a.actionValue;
+      default:
+        // A plain message tapped in the notification shade: show it in full.
+        _queueDialog(() => showAnnouncement(context, a, onAction: (_) async {}));
+    }
   }
 
   Future<void> _openLink(String raw) async {
@@ -146,6 +206,9 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     _toasts?.cancel();
+    _downloadToasts?.cancel();
+    _popupSub?.cancel();
+    _tapSub?.cancel();
     _linkSub?.cancel();
     _deepLinks.dispose();
     super.dispose();
