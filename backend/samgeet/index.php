@@ -46,7 +46,8 @@ $sha = $release['sha256'] ?? '';
 <meta property="og:title" content="Samgeet: free, ad-free music for Android">
 <meta property="og:description" content="Millions of songs, no ads, offline downloads and a daily mix made for you.">
 <meta name="theme-color" content="#04040a">
-<link rel="icon" href="site/logo.png">
+<link rel="icon" type="image/png" href="site/app-icon.png">
+<link rel="apple-touch-icon" href="site/app-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Sora:wght@700;800&amp;display=swap" rel="stylesheet">
 <style>
@@ -121,7 +122,7 @@ footer a{color:var(--muted)}
 <body>
 <div class="wrap">
   <header>
-    <a class="brand" href="./"><img src="site/logo.png" alt="">Samgeet</a>
+    <a class="brand" href="./"><img src="site/app-icon.png" alt="">Samgeet</a>
     <a class="top-link" href="<?= e(GITHUB_REPO) ?>" rel="noopener">Open source on GitHub</a>
   </header>
 
