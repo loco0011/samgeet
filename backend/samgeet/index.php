@@ -126,27 +126,39 @@ background:linear-gradient(135deg,rgba(255,92,127,.7),rgba(224,130,63,.5),transp
 .t-songs{grid-area:songs;justify-content:flex-start;background:radial-gradient(120% 90% at 100% 0%,rgba(208,40,79,.35),transparent 55%),radial-gradient(90% 80% at 0% 100%,rgba(224,130,63,.22),transparent 60%),var(--surface)}
 .t-songs .big{font:800 clamp(44px,5vw,64px)/1 Sora,sans-serif;letter-spacing:-2.5px;margin-bottom:6px}
 .t-songs p{max-width:360px}
-.langs{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;padding-top:22px}
-.langs span{padding:7px 13px;border-radius:30px;background:rgba(255,255,255,.07);border:1px solid var(--line);font-weight:600;font-size:13.5px;animation:pop 6s ease-in-out infinite}
-.langs span:nth-child(3n+1){animation-delay:-1s}.langs span:nth-child(3n+2){animation-delay:-3s}.langs span:nth-child(4n){animation-delay:-4.5s}
-@keyframes pop{0%,80%,100%{background:rgba(255,255,255,.07);border-color:var(--line)}88%{background:rgba(208,40,79,.35);border-color:rgba(255,92,127,.6)}}
+.cats{display:grid;gap:10px;margin-top:auto;padding-top:22px;margin-left:-24px;margin-right:-24px}
+.marquee{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.track{display:flex;width:max-content;animation:scroll 46s linear infinite}
+.marquee.rev .track{animation-direction:reverse;animation-duration:52s}
+.track span{flex:none;margin-right:8px;padding:7px 14px;border-radius:30px;background:rgba(255,255,255,.07);border:1px solid var(--line);font-weight:600;font-size:13.5px;white-space:nowrap}
+.marquee.rev .track span{background:rgba(208,40,79,.14);border-color:rgba(255,92,127,.28);color:#ffc2cf}
+.t-songs:hover .track{animation-play-state:paused}
+@keyframes scroll{to{transform:translateX(-50%)}}
 .hq{position:absolute;top:22px;right:22px;padding:6px 12px;border-radius:12px;background:rgba(0,0,0,.35);border:1px solid var(--line);font-size:13px;color:var(--muted)}.hq b{color:var(--ink);font:800 15px Sora,sans-serif}
-.t-mix{grid-area:mix}.t-search{grid-area:search}.t-offline{grid-area:offline;flex-direction:row;align-items:flex-end;gap:22px}
+.t-mix{grid-area:mix}.t-search{grid-area:search}.t-offline{grid-area:offline;flex-direction:row;align-items:center;justify-content:flex-start;gap:24px}
 .t-offline>div:last-child{flex:1}.t-eq{grid-area:eq}.t-sync{grid-area:sync}.t-free{grid-area:free;background:linear-gradient(150deg,rgba(166,31,46,.55),rgba(224,130,63,.3)),var(--surface)}
 /* Daily Mix: a fanned stack of covers that spreads on hover. */
-.stack{position:relative;height:96px;margin-bottom:auto}
+.stack{position:relative;height:96px;margin-bottom:auto;padding-bottom:18px;box-sizing:content-box}
 .stack img{position:absolute;top:0;width:72px;height:96px;object-fit:cover;object-position:top;border-radius:14px;border:2px solid #1a1a28;box-shadow:0 10px 24px rgba(0,0,0,.5);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
 .stack img:nth-child(1){left:0;transform:rotate(-10deg)}.stack img:nth-child(2){left:38px;transform:rotate(-2deg);z-index:1}.stack img:nth-child(3){left:76px;transform:rotate(7deg);z-index:2}
 .t-mix:hover .stack img:nth-child(1){transform:rotate(-16deg) translate(-8px,-4px)}.t-mix:hover .stack img:nth-child(3){transform:rotate(13deg) translate(10px,-4px)}
 /* Search: a typo being typed, then the right song found. */
-.mock-search{margin-bottom:auto;display:grid;gap:8px}
+.mock-search{margin-bottom:auto;padding-bottom:16px;display:grid;gap:8px}
 .q{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:14px;background:rgba(0,0,0,.35);border:1px solid var(--line);font-weight:600}
-.mag{color:var(--muted)}.typed{display:inline-block;overflow:hidden;white-space:nowrap;width:7ch;animation:type 5s steps(7) infinite}
+.mag{color:var(--muted)}.typed{display:inline-flex;white-space:nowrap}
+.typed i{font-style:normal;display:inline-block;max-width:0;overflow:hidden;animation:5s linear infinite}
+.typed i:nth-child(1){animation-name:k1}@keyframes k1{0%,5.9%{max-width:0}6.0%,92%{max-width:1em}93%,100%{max-width:0}}
+.typed i:nth-child(2){animation-name:k2}@keyframes k2{0%,10.4%{max-width:0}10.5%,92%{max-width:1em}93%,100%{max-width:0}}
+.typed i:nth-child(3){animation-name:k3}@keyframes k3{0%,14.9%{max-width:0}15.0%,92%{max-width:1em}93%,100%{max-width:0}}
+.typed i:nth-child(4){animation-name:k4}@keyframes k4{0%,19.4%{max-width:0}19.5%,92%{max-width:1em}93%,100%{max-width:0}}
+.typed i:nth-child(5){animation-name:k5}@keyframes k5{0%,23.9%{max-width:0}24.0%,92%{max-width:1em}93%,100%{max-width:0}}
+.typed i:nth-child(6){animation-name:k6}@keyframes k6{0%,28.4%{max-width:0}28.5%,92%{max-width:1em}93%,100%{max-width:0}}
+.typed i:nth-child(7){animation-name:k7}@keyframes k7{0%,32.9%{max-width:0}33.0%,92%{max-width:1em}93%,100%{max-width:0}}
 .caret{width:2px;height:16px;background:#ff5c7f;animation:blink 1s steps(1) infinite}
 .hit{padding:9px 12px;border-radius:14px;background:rgba(63,178,127,.12);border:1px solid rgba(63,178,127,.35);font-weight:700;font-size:14px;animation:found 5s ease infinite}
 .hit small{color:var(--muted);font-weight:500}.ok{color:#3fb27f}
-@keyframes type{0%{width:0}35%,100%{width:7ch}}@keyframes blink{50%{opacity:0}}
-@keyframes found{0%,38%{opacity:0;transform:translateY(-6px)}46%,92%{opacity:1;transform:none}100%{opacity:0}}
+@keyframes blink{50%{opacity:0}}
+@keyframes found{0%,40%{opacity:0;transform:translateY(-6px)}46%,92%{opacity:1;transform:none}96%,100%{opacity:0}}
 /* Downloads: one song filling up, one already saved. */
 .dl{width:min(320px,52%);display:grid;gap:10px;padding:14px;border-radius:18px;background:rgba(0,0,0,.3);border:1px solid var(--line);align-self:center}
 .dl-row{display:flex;align-items:center;gap:10px;font-weight:600;font-size:14px}.dl-name{flex:1}.dl-ico{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(208,40,79,.25);color:#ff8aa5;font-weight:800}
@@ -174,7 +186,7 @@ background:linear-gradient(135deg,rgba(255,92,127,.7),rgba(224,130,63,.5),transp
 @media (max-width:1000px){.bento{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"songs songs" "mix search" "offline offline" "eq free" "sync sync"}}
 @media (max-width:600px){.bento{grid-template-columns:minmax(0,1fr);grid-template-areas:"songs" "mix" "search" "offline" "eq" "sync" "free";grid-auto-rows:auto}
 .tile{min-height:190px}.t-offline{flex-direction:column;align-items:stretch}.dl{width:auto}}
-@media (prefers-reduced-motion:reduce){.langs span,.typed,.caret,.hit,.bar i,.dl-pct::after,.eq-big i,.sync .cloud,.sync .line i{animation:none!important}.typed{width:7ch}.hit{opacity:1}.bar i{width:70%}.eq-big i{height:60%}}
+@media (prefers-reduced-motion:reduce){.track,.typed i,.caret,.hit,.bar i,.dl-pct::after,.eq-big i,.sync .cloud,.sync .line i{animation:none!important}.typed i{max-width:1em}.hit{opacity:1}.track{flex-wrap:wrap;width:auto}.bar i{width:70%}.eq-big i{height:60%}}
 @media (max-width:900px){.hero{grid-template-columns:1fr;padding-top:10px}.phones{height:440px}.phone{width:200px}.steps{grid-template-columns:1fr}.looks{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:480px){.phones{height:380px}.phone{width:170px}.phone.a{left:0}.phone.b{right:0}.btn{width:100%;justify-content:center}}
 </style>
@@ -214,10 +226,10 @@ background:linear-gradient(135deg,rgba(255,92,127,.7),rgba(224,130,63,.5),transp
     <div class="bento">
       <article class="tile t-songs">
         <div class="big">Millions<br>of songs</div>
-        <p>Bollywood to K-pop, up to 320 kbps, with nothing in between.</p>
-        <div class="langs" aria-hidden="true">
-          <span>Hindi</span><span>Bengali</span><span>Punjabi</span><span>English</span><span>Tamil</span><span>Telugu</span>
-          <span>Marathi</span><span>Gujarati</span><span>Kannada</span><span>Malayalam</span><span>Odia</span><span>K-pop</span>
+        <p>17 languages and every mood, from Bollywood to K-pop, up to 320 kbps.</p>
+        <div class="cats" aria-hidden="true">
+          <div class="marquee"><div class="track"><span>Hindi</span><span>Bengali</span><span>English</span><span>Punjabi</span><span>Tamil</span><span>Telugu</span><span>Marathi</span><span>Gujarati</span><span>Kannada</span><span>Malayalam</span><span>Odia</span><span>Bhojpuri</span><span>Assamese</span><span>Haryanvi</span><span>Rajasthani</span><span>Sanskrit</span><span>K-pop</span><span>Hindi</span><span>Bengali</span><span>English</span><span>Punjabi</span><span>Tamil</span><span>Telugu</span><span>Marathi</span><span>Gujarati</span><span>Kannada</span><span>Malayalam</span><span>Odia</span><span>Bhojpuri</span><span>Assamese</span><span>Haryanvi</span><span>Rajasthani</span><span>Sanskrit</span><span>K-pop</span></div></div>
+          <div class="marquee rev"><div class="track"><span>Bollywood</span><span>Romantic</span><span>Party</span><span>Chill</span><span>Lo-fi</span><span>Indie</span><span>Workout</span><span>Devotional</span><span>Ghazals</span><span>Sufi</span><span>Rabindra Sangeet</span><span>90s</span><span>80s</span><span>Heartbreak</span><span>Focus</span><span>Rainy day</span><span>K-Drama OST</span><span>English Pop</span><span>Bollywood</span><span>Romantic</span><span>Party</span><span>Chill</span><span>Lo-fi</span><span>Indie</span><span>Workout</span><span>Devotional</span><span>Ghazals</span><span>Sufi</span><span>Rabindra Sangeet</span><span>90s</span><span>80s</span><span>Heartbreak</span><span>Focus</span><span>Rainy day</span><span>K-Drama OST</span><span>English Pop</span></div></div>
         </div>
         <div class="hq"><b>320</b> kbps</div>
       </article>
@@ -232,7 +244,7 @@ background:linear-gradient(135deg,rgba(255,92,127,.7),rgba(224,130,63,.5),transp
 
       <article class="tile t-search">
         <div class="mock-search" aria-hidden="true">
-          <div class="q"><span class="mag">⌕</span><span class="typed">kesarya</span><span class="caret"></span></div>
+          <div class="q"><span class="mag">⌕</span><span class="typed"><i>k</i><i>e</i><i>s</i><i>a</i><i>r</i><i>y</i><i>a</i></span><span class="caret"></span></div>
           <div class="hit"><span class="ok">✓</span> Kesariya <small>Arijit Singh</small></div>
         </div>
         <h3>Search that forgives typos</h3>
