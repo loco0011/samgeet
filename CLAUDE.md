@@ -92,10 +92,11 @@ Installed apps see the update popup about 4 s after opening. From 1.4.0 the app 
 - UI copy is plain and friendly; match the dark "Ember" look (`lib/ui/theme.dart`, `mood_theme.dart`).
 - Keep the About screen, `NOTICE.md`, `README.md` and `HOW_IT_WORKS.md` accurate when data handling changes.
 
-## Status (2026-09-25)
+## Status (2026-10-03)
 
-- Latest release: **1.3.3** (build 8): accounts + sync, equalizer, short share links, voice play, sign-in popup.
-- 1.4.0 (branch `features/admin-analytics-1.4`): private signed API, admin panel, listening data, login required to
-  like/download/share, player looks, admin-sent updates and notifications.
+- Latest release: **1.4.0** (build 9, `[required]` on GitHub): private signed API, admin panel with reports (signed-in
+  listeners and guests), listening data, login required to like/download/share, player looks, admin-sent updates and
+  notifications, faster search, 40-song Daily Mix, public download page at `<private path>/samgeet/`.
+- Live search check: `flutter test tool/search_live_check.dart`.
 - Known gaps: messages arrive only while the app runs (no push service); `HOW_IT_WORKS.pdf` is older than `HOW_IT_WORKS.md`;
   equalizer ideas for later are written up (phase 1: own presets, Simple mode, A/B compare, undo).
