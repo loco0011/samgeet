@@ -99,10 +99,6 @@ h1 span{background:linear-gradient(90deg,#ff5c7f,#e0823f);-webkit-background-cli
 section{padding:56px 0}
 h2{font:800 clamp(26px,3.5vw,36px)/1.15 Sora,sans-serif;letter-spacing:-1px;margin:0 0 10px}
 .sub{color:var(--muted);margin:0 0 30px;max-width:620px}
-.features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
-.f{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:22px}
-.f .i{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:22px;background:linear-gradient(135deg,rgba(208,40,79,.25),rgba(224,130,63,.2));margin-bottom:14px}
-.f h3{margin:0 0 6px;font:700 17px Sora,sans-serif}.f p{margin:0;color:var(--muted);font-size:14.5px}
 .looks{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
 .look{text-align:center}.look img{width:100%;border-radius:22px;border:1px solid var(--line);display:block}
 .look b{display:block;margin-top:10px}.look span{color:var(--muted);font-size:13px}
@@ -115,7 +111,71 @@ h2{font:800 clamp(26px,3.5vw,36px)/1.15 Sora,sans-serif;letter-spacing:-1px;marg
 .sha{font:12px ui-monospace,Consolas,monospace;color:var(--muted);word-break:break-all;margin-top:16px}
 footer{color:var(--muted);font-size:13px;padding:30px 0 50px;border-top:1px solid var(--line);margin-top:30px}
 footer a{color:var(--muted)}
-@media (max-width:900px){.hero{grid-template-columns:1fr;padding-top:10px}.phones{height:440px}.phone{width:200px}.features,.steps{grid-template-columns:1fr}.looks{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* Features: a bento grid of tiles, each with a small live visual. */
+.eyebrow{display:inline-block;font:700 12px Sora,sans-serif;letter-spacing:2px;text-transform:uppercase;color:#ff8aa5;margin-bottom:10px}
+.bento{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:minmax(200px,auto);gap:16px;
+grid-template-areas:"songs songs mix search" "songs songs offline offline" "eq sync sync free"}
+.tile{position:relative;overflow:hidden;border-radius:26px;padding:24px;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;
+background:linear-gradient(160deg,rgba(255,255,255,.055),rgba(255,255,255,.015) 40%),var(--surface);border:1px solid var(--line);
+transition:transform .35s cubic-bezier(.2,.8,.2,1),border-color .35s,box-shadow .35s}
+.tile::before{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;pointer-events:none;opacity:0;transition:opacity .35s;
+background:linear-gradient(135deg,rgba(255,92,127,.7),rgba(224,130,63,.5),transparent 60%);
+-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.tile:hover{transform:translateY(-4px);box-shadow:0 24px 50px rgba(0,0,0,.45)}.tile:hover::before{opacity:1}
+.tile h3{margin:0;font:700 19px/1.25 Sora,sans-serif;letter-spacing:-.3px}.tile p{margin:0;color:var(--muted);font-size:14.5px;line-height:1.5}
+.t-songs{grid-area:songs;justify-content:flex-start;background:radial-gradient(120% 90% at 100% 0%,rgba(208,40,79,.35),transparent 55%),radial-gradient(90% 80% at 0% 100%,rgba(224,130,63,.22),transparent 60%),var(--surface)}
+.t-songs .big{font:800 clamp(44px,5vw,64px)/1 Sora,sans-serif;letter-spacing:-2.5px;margin-bottom:6px}
+.t-songs p{max-width:360px}
+.langs{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;padding-top:22px}
+.langs span{padding:7px 13px;border-radius:30px;background:rgba(255,255,255,.07);border:1px solid var(--line);font-weight:600;font-size:13.5px;animation:pop 6s ease-in-out infinite}
+.langs span:nth-child(3n+1){animation-delay:-1s}.langs span:nth-child(3n+2){animation-delay:-3s}.langs span:nth-child(4n){animation-delay:-4.5s}
+@keyframes pop{0%,80%,100%{background:rgba(255,255,255,.07);border-color:var(--line)}88%{background:rgba(208,40,79,.35);border-color:rgba(255,92,127,.6)}}
+.hq{position:absolute;top:22px;right:22px;padding:6px 12px;border-radius:12px;background:rgba(0,0,0,.35);border:1px solid var(--line);font-size:13px;color:var(--muted)}.hq b{color:var(--ink);font:800 15px Sora,sans-serif}
+.t-mix{grid-area:mix}.t-search{grid-area:search}.t-offline{grid-area:offline;flex-direction:row;align-items:flex-end;gap:22px}
+.t-offline>div:last-child{flex:1}.t-eq{grid-area:eq}.t-sync{grid-area:sync}.t-free{grid-area:free;background:linear-gradient(150deg,rgba(166,31,46,.55),rgba(224,130,63,.3)),var(--surface)}
+/* Daily Mix: a fanned stack of covers that spreads on hover. */
+.stack{position:relative;height:96px;margin-bottom:auto}
+.stack img{position:absolute;top:0;width:72px;height:96px;object-fit:cover;object-position:top;border-radius:14px;border:2px solid #1a1a28;box-shadow:0 10px 24px rgba(0,0,0,.5);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+.stack img:nth-child(1){left:0;transform:rotate(-10deg)}.stack img:nth-child(2){left:38px;transform:rotate(-2deg);z-index:1}.stack img:nth-child(3){left:76px;transform:rotate(7deg);z-index:2}
+.t-mix:hover .stack img:nth-child(1){transform:rotate(-16deg) translate(-8px,-4px)}.t-mix:hover .stack img:nth-child(3){transform:rotate(13deg) translate(10px,-4px)}
+/* Search: a typo being typed, then the right song found. */
+.mock-search{margin-bottom:auto;display:grid;gap:8px}
+.q{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:14px;background:rgba(0,0,0,.35);border:1px solid var(--line);font-weight:600}
+.mag{color:var(--muted)}.typed{display:inline-block;overflow:hidden;white-space:nowrap;width:7ch;animation:type 5s steps(7) infinite}
+.caret{width:2px;height:16px;background:#ff5c7f;animation:blink 1s steps(1) infinite}
+.hit{padding:9px 12px;border-radius:14px;background:rgba(63,178,127,.12);border:1px solid rgba(63,178,127,.35);font-weight:700;font-size:14px;animation:found 5s ease infinite}
+.hit small{color:var(--muted);font-weight:500}.ok{color:#3fb27f}
+@keyframes type{0%{width:0}35%,100%{width:7ch}}@keyframes blink{50%{opacity:0}}
+@keyframes found{0%,38%{opacity:0;transform:translateY(-6px)}46%,92%{opacity:1;transform:none}100%{opacity:0}}
+/* Downloads: one song filling up, one already saved. */
+.dl{width:min(320px,52%);display:grid;gap:10px;padding:14px;border-radius:18px;background:rgba(0,0,0,.3);border:1px solid var(--line);align-self:center}
+.dl-row{display:flex;align-items:center;gap:10px;font-weight:600;font-size:14px}.dl-name{flex:1}.dl-ico{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(208,40,79,.25);color:#ff8aa5;font-weight:800}
+.dl-row.done .dl-ico{background:rgba(63,178,127,.2);color:#3fb27f}.dl-row.done span:last-child{color:#3fb27f;font-size:12.5px}
+.dl-pct::after{content:"0%";color:var(--muted);font-size:12.5px;animation:pct 4s linear infinite}
+.bar{height:6px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden}.bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#d0284f,#e0823f);animation:fill 4s linear infinite}
+@keyframes fill{0%{width:0}85%,100%{width:100%}}
+@keyframes pct{0%{content:"0%"}20%{content:"24%"}40%{content:"47%"}60%{content:"70%"}80%{content:"94%"}85%,100%{content:"100%"}}
+/* Equalizer: dancing bars. */
+.eq-big{display:flex;align-items:flex-end;gap:5px;height:70px;margin-bottom:auto}
+.eq-big i{flex:1;border-radius:4px;background:linear-gradient(#ff5c7f,#e0823f);animation:bars 1.4s ease-in-out infinite}
+.eq-big i:nth-child(odd){animation-duration:1.1s}.eq-big i:nth-child(3n){animation-duration:1.7s}
+.eq-big i:nth-child(2){animation-delay:-.3s}.eq-big i:nth-child(3){animation-delay:-.6s}.eq-big i:nth-child(4){animation-delay:-.9s}.eq-big i:nth-child(5){animation-delay:-.2s}
+.eq-big i:nth-child(6){animation-delay:-.5s}.eq-big i:nth-child(7){animation-delay:-.8s}.eq-big i:nth-child(8){animation-delay:-.1s}.eq-big i:nth-child(9){animation-delay:-.4s}.eq-big i:nth-child(10){animation-delay:-.7s}
+@keyframes bars{0%,100%{height:20%}50%{height:100%}}
+/* Sync: phones, a cloud, and data moving between them. */
+.sync{display:flex;align-items:center;gap:10px;margin-bottom:auto;font-size:30px}
+.sync .dev{flex:none;width:26px;height:44px;border-radius:7px;border:2px solid rgba(255,255,255,.55);position:relative;background:linear-gradient(160deg,rgba(208,40,79,.35),rgba(24,24,41,.9))}.sync .dev::after{content:"";position:absolute;left:50%;bottom:4px;width:8px;height:2px;border-radius:2px;background:rgba(255,255,255,.5);transform:translateX(-50%)}
+.sync .cloud{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:rgba(208,40,79,.18);border:1px solid rgba(255,92,127,.4);color:#ff8aa5;animation:pulse 2.4s ease-in-out infinite}
+.sync .line{flex:1;height:2px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.18) 0 6px,transparent 6px 12px);position:relative;overflow:hidden}
+.sync .line i{position:absolute;top:-3px;width:8px;height:8px;border-radius:50%;background:#ff5c7f;box-shadow:0 0 12px #ff5c7f;animation:travel 2.4s linear infinite}
+.sync .line:last-of-type i{animation-direction:reverse}
+@keyframes travel{from{left:-10%}to{left:100%}}@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(208,40,79,.4)}50%{box-shadow:0 0 0 12px rgba(208,40,79,0)}}
+.free-big{font:800 56px/1 Sora,sans-serif;letter-spacing:-2px;margin-bottom:auto}
+@media (max-width:1000px){.bento{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"songs songs" "mix search" "offline offline" "eq free" "sync sync"}}
+@media (max-width:600px){.bento{grid-template-columns:minmax(0,1fr);grid-template-areas:"songs" "mix" "search" "offline" "eq" "sync" "free";grid-auto-rows:auto}
+.tile{min-height:190px}.t-offline{flex-direction:column;align-items:stretch}.dl{width:auto}}
+@media (prefers-reduced-motion:reduce){.langs span,.typed,.caret,.hit,.bar i,.dl-pct::after,.eq-big i,.sync .cloud,.sync .line i{animation:none!important}.typed{width:7ch}.hit{opacity:1}.bar i{width:70%}.eq-big i{height:60%}}
+@media (max-width:900px){.hero{grid-template-columns:1fr;padding-top:10px}.phones{height:440px}.phone{width:200px}.steps{grid-template-columns:1fr}.looks{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:480px){.phones{height:380px}.phone{width:170px}.phone.a{left:0}.phone.b{right:0}.btn{width:100%;justify-content:center}}
 </style>
 </head>
@@ -146,17 +206,70 @@ footer a{color:var(--muted)}
   </div>
 </div>
 
-<section>
+<section class="feat">
   <div class="wrap">
+    <span class="eyebrow">Features</span>
     <h2>Everything you want from a music app</h2>
     <p class="sub">Made by one developer, for listeners. Here's what you get.</p>
-    <div class="features">
-      <div class="f"><div class="i">🎧</div><h3>Millions of songs</h3><p>Bollywood, Bengali, Punjabi, Tamil, Telugu, English, K-pop and more, up to 320 kbps.</p></div>
-      <div class="f"><div class="i">✨</div><h3>Your Daily Mix</h3><p>A fresh mix of 40 songs every day, built from your likes, plays and favourite singers.</p></div>
-      <div class="f"><div class="i">⬇️</div><h3>Offline downloads</h3><p>Save songs and whole albums, then listen on a flight or with no signal at all.</p></div>
-      <div class="f"><div class="i">🔎</div><h3>Search that forgives typos</h3><p>Find a song from a misspelling, part of the name, or a line from the lyrics.</p></div>
-      <div class="f"><div class="i">🎚️</div><h3>Equalizer and boost</h3><p>Shape the sound with presets or your own curve, and save the sounds you like.</p></div>
-      <div class="f"><div class="i">☁️</div><h3>Your library everywhere</h3><p>Sign in and your playlists, likes and history follow you to any phone.</p></div>
+    <div class="bento">
+      <article class="tile t-songs">
+        <div class="big">Millions<br>of songs</div>
+        <p>Bollywood to K-pop, up to 320 kbps, with nothing in between.</p>
+        <div class="langs" aria-hidden="true">
+          <span>Hindi</span><span>Bengali</span><span>Punjabi</span><span>English</span><span>Tamil</span><span>Telugu</span>
+          <span>Marathi</span><span>Gujarati</span><span>Kannada</span><span>Malayalam</span><span>Odia</span><span>K-pop</span>
+        </div>
+        <div class="hq"><b>320</b> kbps</div>
+      </article>
+
+      <article class="tile t-mix">
+        <div class="stack" aria-hidden="true">
+          <img src="site/cover.jpg" alt="" loading="lazy"><img src="site/immersive.jpg" alt="" loading="lazy"><img src="site/disc.jpg" alt="" loading="lazy">
+        </div>
+        <h3>Your Daily Mix</h3>
+        <p>40 fresh songs every day, from your likes, plays and favourite singers.</p>
+      </article>
+
+      <article class="tile t-search">
+        <div class="mock-search" aria-hidden="true">
+          <div class="q"><span class="mag">⌕</span><span class="typed">kesarya</span><span class="caret"></span></div>
+          <div class="hit"><span class="ok">✓</span> Kesariya <small>Arijit Singh</small></div>
+        </div>
+        <h3>Search that forgives typos</h3>
+        <p>Misspell it, half-type it, or sing a line of the lyrics.</p>
+      </article>
+
+      <article class="tile t-offline">
+        <div class="dl" aria-hidden="true">
+          <div class="dl-row"><span class="dl-ico">↓</span><span class="dl-name">Chaleya</span><span class="dl-pct"></span></div>
+          <div class="bar"><i></i></div>
+          <div class="dl-row done"><span class="dl-ico">✓</span><span class="dl-name">Tum Hi Ho</span><span>Saved</span></div>
+        </div>
+        <div>
+          <h3>Offline downloads</h3>
+          <p>Save songs and whole albums. Listen on a flight, in the metro, or with no signal at all.</p>
+        </div>
+      </article>
+
+      <article class="tile t-eq">
+        <div class="eq-big" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <h3>Equalizer and boost</h3>
+        <p>Presets or your own curve, and save the sounds you love.</p>
+      </article>
+
+      <article class="tile t-sync">
+        <div class="sync" aria-hidden="true">
+          <span class="dev"></span><span class="line"><i></i></span><span class="cloud">☁</span><span class="line"><i></i></span><span class="dev"></span>
+        </div>
+        <h3>Your library everywhere</h3>
+        <p>Sign in and your playlists, likes and history follow you to any phone.</p>
+      </article>
+
+      <article class="tile t-free">
+        <div class="free-big">₹0</div>
+        <h3>No ads. No subscription.</h3>
+        <p>Free, and it stays that way.</p>
+      </article>
     </div>
   </div>
 </section>
