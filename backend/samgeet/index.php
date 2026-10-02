@@ -71,9 +71,30 @@ h1 span{background:linear-gradient(90deg,#ff5c7f,#e0823f);-webkit-background-cli
 .btn.ghost{border:1px solid var(--line);background:var(--surface)}
 .meta{color:var(--muted);font-size:13px;margin-top:14px}
 .phones{position:relative;height:560px}
-.phone{position:absolute;width:250px;border-radius:30px;overflow:hidden;border:6px solid #1a1a28;box-shadow:0 30px 60px rgba(0,0,0,.55)}
+/* A soft glow that breathes behind the phones. */
+.phones::before{content:"";position:absolute;inset:8% 4%;border-radius:50%;background:radial-gradient(closest-side,rgba(208,40,79,.55),rgba(224,130,63,.25) 55%,transparent);filter:blur(30px);animation:glow 5s ease-in-out infinite}
+.phone{position:absolute;width:250px;border-radius:30px;overflow:hidden;border:6px solid #1a1a28;box-shadow:0 30px 60px rgba(0,0,0,.55);will-change:transform}
 .phone img{display:block;width:100%;height:auto}
-.phone.a{left:6%;top:30px;transform:rotate(-6deg)}.phone.b{right:6%;top:0;transform:rotate(5deg);z-index:2}
+/* A light sheen that sweeps across each screen now and then. */
+.phone::after{content:"";position:absolute;top:0;bottom:0;left:-60%;width:45%;background:linear-gradient(105deg,transparent,rgba(255,255,255,.16),transparent);transform:skewX(-12deg);animation:sheen 6s ease-in-out 1.6s infinite}
+.phone.b::after{animation-delay:3.4s}
+/* In from below when the page opens, then a gentle float, the two phones out of step. */
+.phone.a{left:6%;top:30px;transform:rotate(-6deg);animation:inA 1s cubic-bezier(.2,.8,.2,1) both,floatA 6s ease-in-out 1s infinite}
+.phone.b{right:6%;top:0;transform:rotate(5deg);z-index:2;animation:inB 1s cubic-bezier(.2,.8,.2,1) .15s both,floatB 7s ease-in-out 1.15s infinite}
+@keyframes inA{from{opacity:0;transform:translateY(70px) rotate(-14deg)}to{opacity:1;transform:translateY(0) rotate(-6deg)}}
+@keyframes inB{from{opacity:0;transform:translateY(90px) rotate(12deg)}to{opacity:1;transform:translateY(0) rotate(5deg)}}
+@keyframes floatA{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-16px) rotate(-4.5deg)}}
+@keyframes floatB{0%,100%{transform:translateY(0) rotate(5deg)}50%{transform:translateY(-22px) rotate(3.5deg)}}
+@keyframes glow{0%,100%{opacity:.75;transform:scale(1)}50%{opacity:1;transform:scale(1.08)}}
+@keyframes sheen{0%{left:-60%}30%,100%{left:130%}}
+/* A little "now playing" card with dancing equalizer bars. */
+.chip{position:absolute;left:50%;bottom:6%;z-index:3;display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:40px;background:rgba(15,15,26,.82);border:1px solid var(--line);backdrop-filter:blur(10px);font-weight:700;font-size:14px;line-height:1.3;white-space:nowrap;box-shadow:0 12px 30px rgba(0,0,0,.45);transform:translateX(-50%);animation:chipIn .8s cubic-bezier(.2,.8,.2,1) .7s both}
+.chip small{display:block;color:var(--muted);font-weight:500;font-size:12px}
+.eq{display:flex;align-items:flex-end;gap:3px;height:18px}.eq i{display:block;width:4px;height:5px;border-radius:2px;background:linear-gradient(#ff5c7f,#e0823f);animation:eq 1s ease-in-out infinite}
+.eq i:nth-child(2){animation-delay:-.4s}.eq i:nth-child(3){animation-delay:-.7s}.eq i:nth-child(4){animation-delay:-.2s}
+@keyframes eq{0%,100%{height:5px}50%{height:18px}}
+@keyframes chipIn{from{opacity:0;transform:translate(-50%,20px)}to{opacity:1;transform:translate(-50%,0)}}
+@media (prefers-reduced-motion:reduce){.phone,.phone::after,.phones::before,.chip,.eq i{animation:none!important}.phone::after{display:none}}
 section{padding:56px 0}
 h2{font:800 clamp(26px,3.5vw,36px)/1.15 Sora,sans-serif;letter-spacing:-1px;margin:0 0 10px}
 .sub{color:var(--muted);margin:0 0 30px;max-width:620px}
@@ -119,6 +140,7 @@ footer a{color:var(--muted)}
     <div class="phones" aria-hidden="true">
       <div class="phone a"><img src="site/disc.jpg" alt=""></div>
       <div class="phone b"><img src="site/immersive.jpg" alt=""></div>
+      <div class="chip"><span class="eq"><i></i><i></i><i></i><i></i></span><span>Kesariya<small>Arijit Singh · Now playing</small></span></div>
     </div>
   </div>
 </div>
