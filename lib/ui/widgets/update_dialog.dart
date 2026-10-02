@@ -151,7 +151,7 @@ Future<void> showAnnouncement(BuildContext context, Announcement a, {required Fu
             _ => Icons.check_rounded,
           },
           onPrimary: () {
-            close(ctx, opened: a.action != 'none');
+            close(ctx, opened: true); // pressing the main button counts as opened, link or not
             if (a.action != 'none') onAction(a);
           },
           onClose: () => close(ctx, opened: false),
