@@ -1040,8 +1040,23 @@ h2{font:700 15px Sora,system-ui,sans-serif;margin:0 0 12px}h2 small{color:var(--
 .top{display:flex;align-items:center;gap:18px;padding:14px 24px;border-bottom:1px solid var(--line);position:sticky;top:0;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(12px);z-index:5;flex-wrap:wrap}
 .brand{font:800 18px Sora,sans-serif;display:flex;align-items:center;gap:10px;text-decoration:none}
 .brand i{width:28px;height:28px;border-radius:9px;background:linear-gradient(135deg,#7a1232,#d0284f 55%,#e0823f);display:grid;place-items:center;font-style:normal;color:#fff;font-size:15px}
+.menu{display:flex;align-items:center;gap:18px;flex:1;min-width:0}
 nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}nav a{padding:7px 12px;border-radius:10px;text-decoration:none;color:var(--muted);font-weight:600}
 nav a.on,nav a:hover{background:var(--surface2);color:var(--ink)}
+.here,.menu-btn{display:none}
+.menu-btn{margin-left:auto;width:42px;height:42px;padding:0;border-radius:12px;flex:none;place-content:center;gap:5px}
+.menu-btn span{display:block;width:18px;height:2px;border-radius:2px;background:var(--ink);transition:transform .2s,opacity .2s}
+.top.open .menu-btn span:nth-child(1){transform:translateY(7px) rotate(45deg)}.top.open .menu-btn span:nth-child(2){opacity:0}.top.open .menu-btn span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+@media (max-width:860px){
+  .top{flex-wrap:nowrap;gap:12px}
+  .here{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-weight:700;padding-left:12px;border-left:1px solid var(--line)}
+  .menu-btn{display:grid}
+  .menu{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;align-items:stretch;gap:10px;padding:10px 16px 16px;background:var(--bg);border-bottom:1px solid var(--line);box-shadow:0 18px 30px rgba(0,0,0,.45)}
+  .top.open .menu{display:flex}
+  .menu nav{flex-direction:column;gap:2px}.menu nav a{padding:13px 14px;font-size:15px;border-radius:12px}
+  .signout button{width:100%;padding:12px}
+  .head-row>div{flex:1 1 100%}.ranges{flex:1 1 100%;flex-wrap:nowrap}.ranges a{flex:1;text-align:center;white-space:nowrap;padding:7px 4px}
+}
 main{max-width:1240px;margin:0 auto;padding:22px 24px 60px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:18px;min-width:0}
 .card.narrow{max-width:620px}
@@ -1180,11 +1195,21 @@ function render_layout(string $page, array $admin, ?string $flash, string $conte
     $nav = ['dashboard' => 'Overview', 'users' => 'Accounts', 'releases' => 'App updates', 'notifications' => 'Notifications', 'export' => 'Export', 'account' => 'My account'];
     $active = $page === 'user' ? 'users' : ($page === 'notification' ? 'notifications' : $page);
     ?><body>
-    <div class="top"><a class="brand" href="?p=dashboard"><i>♪</i> Samgeet</a>
-      <nav><?php foreach ($nav as $k => $label): ?><a class="<?= $k === $active ? 'on' : '' ?>" href="?p=<?= $k ?>"><?= $label ?></a><?php endforeach; ?></nav>
-      <form method="post" action="?p=logout" class="inline"><?= csrf_field() ?><button>Sign out</button></form></div>
+    <div class="top" id="top"><a class="brand" href="?p=dashboard"><i>♪</i> Samgeet</a>
+      <span class="here"><?= h($nav[$active] ?? '') ?></span>
+      <button type="button" class="menu-btn" id="menu-btn" aria-expanded="false" aria-controls="menu" aria-label="Menu"><span></span><span></span><span></span></button>
+      <div class="menu" id="menu">
+        <nav><?php foreach ($nav as $k => $label): ?><a class="<?= $k === $active ? 'on' : '' ?>" href="?p=<?= $k ?>"><?= $label ?></a><?php endforeach; ?></nav>
+        <form method="post" action="?p=logout" class="inline signout"><?= csrf_field() ?><button>Sign out</button></form>
+      </div></div>
     <main><?php if ($flash): ?><div class="flash"><?= h($flash) ?></div><?php endif; ?><?= $content ?></main>
     <script nonce="<?= h($nonce) ?>">
       document.querySelectorAll('form[data-confirm]').forEach(f => f.addEventListener('submit', e => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));
+      // Phone menu: the button opens and closes it; tapping outside or pressing Esc closes it.
+      const top = document.getElementById('top'), menuBtn = document.getElementById('menu-btn');
+      const setMenu = open => { top.classList.toggle('open', open); menuBtn.setAttribute('aria-expanded', String(open)); };
+      menuBtn.addEventListener('click', () => setMenu(!top.classList.contains('open')));
+      document.addEventListener('click', e => { if (!top.contains(e.target)) setMenu(false); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
     </script><?php password_toggles(); ?></body></html><?php
 }
