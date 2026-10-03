@@ -207,9 +207,13 @@ CREATE TABLE IF NOT EXISTS notifications (
   ends_at      DATETIME     NULL,
   active       TINYINT(1)   NOT NULL DEFAULT 1,
   created_by   INT UNSIGNED NULL,
+  source       ENUM('web','app') NOT NULL DEFAULT 'web', -- sent from the web panel or the app's admin tools
+  follow_up    ENUM('missed','unopened') NULL,  -- a re-send to part of follow_of's audience (lib/messages.php)
+  follow_of    INT UNSIGNED NULL,
   created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_notifications_live (active, starts_at),
+  KEY idx_notifications_follow (follow_of),
   CONSTRAINT fk_notifications_admin FOREIGN KEY (created_by) REFERENCES admins (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

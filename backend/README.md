@@ -122,15 +122,37 @@ and events. All times are stored in UTC; the admin panel shows IST.
 `notification_dismiss`, `update_open` / `update_later`.
 
 **Admin panel** (`.../samgeet/admin/`): sign in with an `admins` row (bcrypt). Five wrong
-passwords in 15 minutes lock that address out; sessions end after 2 hours idle or 12 hours. Pages:
-Overview (period switch: today, 7, 30, 90 days or all time; total, active today/week/month, new,
-returning and signed-in accounts; total, active, guest and online phones; share on the latest version;
-plays, listeners, hours, completion and skip rates, offline plays; likes, downloads, shares, searches,
-playlists, sign-ups, message open rate; daily charts; top songs/singers/searches/listeners; tastes;
-languages, hours of day, app versions, phones, player looks), Accounts (search, details, sign out
-everywhere, block, delete), App updates (upload an APK or paste a link, "fill in from GitHub",
-required or not, publish/unpublish), Notifications (popup / phone notification / both; a button to
-update, open a link or search; audience; schedule; reach and open rates), Export (events as CSV).
+passwords in 15 minutes lock that address out; sessions end after 2 hours idle or 12 hours. A sidebar
+(a slide-in menu on phones) with:
+- *Overview*: period switch (today, 7, 30, 90 days, all time) with the change against the period before;
+  listeners, plays, hours, new accounts; online now, active today/week/month; daily chart; signed in vs
+  guests; top songs, singers, most active listeners, top cities, app versions, listening habits.
+- *Listening*: plays by hour and weekday, languages, where plays start, searches, likes, downloads,
+  player looks, tastes picked at sign-up, phone models and Android versions.
+- *Places*: cities and countries from `device_info` (only listeners who shared device details), each
+  city with its listeners and what they play; a rough country for every phone from its language setting.
+- *Listeners*: filter (active today, this week, away 30+ days, blocked), search, sort; each listener's
+  page has their picture (emoji or initials; photos never leave the phone), place, phones, 30-day
+  listening, time of day, top songs and singers, searches, likes, tastes, messages and an activity
+  timeline, plus sign out everywhere, block and delete.
+- *Messages*: tabs for all, from the web panel, from the app, and update reminders; "New message" and
+  "Update reminder" (only apps older than the newest version, text filled in from its release notes).
+  Each message can go out again to everyone, only phones that never got it, only phones that didn't
+  open it, or (update reminders) only phones still on an old version; the original then stops.
+- *App updates*: phones on each version, share on the latest, publish/unpublish, "Publish a version"
+  (upload an APK or paste a link, fill in from GitHub, required or not).
+- *Export*: events as CSV.
+
+The pages are in `lib/admin_views.php`, the layout in `lib/admin_ui.php`; every number comes from
+`lib/reports.php` and sending from `lib/messages.php`, which the app's admin tools (`api/admin.php`)
+use too, so both show the same thing.
+
+### Admin panel 2 (October 2026)
+1. phpMyAdmin → SQL: run `migrations/2026-10-03-messages.sql` (adds `source`, `follow_up`,
+   `follow_of` to `notifications`). Until then everything works except splitting messages by where they
+   were sent from and re-sending to only part of an audience.
+2. Upload `admin/index.php`, `api/admin.php`, `api/app.php` and the new `lib/reports.php`,
+   `lib/messages.php`, `lib/admin_ui.php`, `lib/admin_views.php`.
 
 ### Deploying version 2
 1. phpMyAdmin → SQL: run `deploy/1-schema.sql`, then `deploy/2-admin.sql` (the admin login).

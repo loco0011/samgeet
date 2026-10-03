@@ -37,6 +37,8 @@ small PHP + MySQL server of its own. MIT licensed; the name and logo are not.
 | Accounts + sync | `lib/data/sync_service.dart` (email + password → PBKDF2 key → session; 3-way merge; rev-checked saves) |
 | Listening data | `lib/data/analytics.dart` (queued events → `events.php`); hooks in player, library, downloads, share |
 | Updates + admin messages | `lib/data/app_config.dart` (asks every 30 min, phone notifications), `lib/ui/widgets/fancy_dialog.dart`, `update_dialog.dart` |
+| Admin (in the app) | `lib/data/admin_service.dart` → `backend/samgeet/api/admin.php`; `lib/ui/screens/admin_screen.dart` (shell, messages), `admin/admin_reports.dart`, `admin/admin_widgets.dart`. Opens from Settings: tap the version line 7 times |
+| Admin (web) | `backend/samgeet/admin/index.php` (security, actions), `backend/samgeet/lib/`: `admin_views.php` (pages), `admin_ui.php` (layout), `reports.php` (every number), `messages.php` (sending) (shared with `api/admin.php`). Test locally: XAMPP MariaDB + `php -S`, fixtures in `test/fixtures/admin` |
 | Player looks | `lib/data/player_style.dart`, `lib/ui/widgets/player_style_picker.dart`, layouts in `now_playing_screen.dart` |
 | Login gates | `lib/ui/nav.dart` (`requireSignIn`, `toggleLike`, `downloadGated`, `shareTrackGated`) |
 | Profile copy on server | `lib/data/cloud_service.dart` → `backend/samgeet/api/auth.php` (action `profile`) |

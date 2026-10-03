@@ -52,15 +52,27 @@ sg_guard('app', function () use ($pdo, $in, $install) {
     }
 
     $audience = $user ? "('all','signed_in')" : "('all','guests')";
-    $q = $pdo->prepare("SELECT n.id, n.title, n.body, n.image_url, n.style, n.action, n.action_value, n.action_label, n.show_as,
-                               UNIX_TIMESTAMP(n.starts_at) AS starts
-                        FROM notifications n
-                        LEFT JOIN notification_receipts r ON r.notification_id = n.id AND r.device_id = ?
-                        WHERE n.active = 1 AND n.starts_at <= UTC_TIMESTAMP() AND (n.ends_at IS NULL OR n.ends_at > UTC_TIMESTAMP())
-                          AND (n.audience IN $audience OR (n.audience = 'below_build' AND ? < n.audience_build))
-                          AND r.opened_at IS NULL AND r.dismissed_at IS NULL
-                        ORDER BY n.starts_at DESC LIMIT 5");
-    $q->execute([$deviceId, $build]);
+    $sql = "SELECT n.id, n.title, n.body, n.image_url, n.style, n.action, n.action_value, n.action_label, n.show_as,
+                   UNIX_TIMESTAMP(n.starts_at) AS starts
+            FROM notifications n
+            LEFT JOIN notification_receipts r ON r.notification_id = n.id AND r.device_id = ?
+            WHERE n.active = 1 AND n.starts_at <= UTC_TIMESTAMP() AND (n.ends_at IS NULL OR n.ends_at > UTC_TIMESTAMP())
+              AND (n.audience IN $audience OR (n.audience = 'below_build' AND ? < n.audience_build))
+              AND r.opened_at IS NULL AND r.dismissed_at IS NULL %s
+            ORDER BY n.starts_at DESC LIMIT 5";
+    // Follow-ups go to part of an earlier message's audience: phones that never got it, or got it
+    // and didn't open it (see lib/messages.php). Before the database has those columns, the plain
+    // query still works.
+    $followUps = "AND (n.follow_up IS NULL
+                   OR (n.follow_up = 'missed' AND NOT EXISTS (SELECT 1 FROM notification_receipts x WHERE x.notification_id = n.follow_of AND x.device_id = ?))
+                   OR (n.follow_up = 'unopened' AND EXISTS (SELECT 1 FROM notification_receipts x WHERE x.notification_id = n.follow_of AND x.device_id = ? AND x.opened_at IS NULL)))";
+    try {
+        $q = $pdo->prepare(sprintf($sql, $followUps));
+        $q->execute([$deviceId, $build, $deviceId, $deviceId]);
+    } catch (PDOException $e) {
+        $q = $pdo->prepare(sprintf($sql, ''));
+        $q->execute([$deviceId, $build]);
+    }
     $list = [];
     $mark = $pdo->prepare('INSERT IGNORE INTO notification_receipts (notification_id, device_id) VALUES (?, ?)');
     foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $n) {

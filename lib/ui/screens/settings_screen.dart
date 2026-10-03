@@ -359,9 +359,9 @@ class SettingsScreen extends StatelessWidget {
         ),
         if (context.read<AdminService>().signedIn)
           ListTile(
-            leading: const Icon(Icons.campaign_outlined),
-            title: const Text('Send a message to listeners', style: TextStyle(fontWeight: FontWeight.w700)),
-            subtitle: const Text('Admin', style: TextStyle(color: AppColors.muted)),
+            leading: const Icon(Icons.admin_panel_settings_outlined),
+            title: const Text('Samgeet admin', style: TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: const Text('Reports, listeners and messages', style: TextStyle(color: AppColors.muted)),
             trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
             onTap: () => pushPage(context, const AdminScreen()),
           ),
