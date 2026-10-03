@@ -293,8 +293,8 @@ function view_places(PDO $pdo): string
     echo '</tbody></table></div></section>';
     echo '<div class="stack">';
     echo card_open('Countries') . bars(array_map(fn($c) => ['label' => $c['country'] . ' · ' . $c['cities'] . ($c['cities'] === 1 ? ' city' : ' cities'), 'n' => $c['accounts']], $p['countries'])) . '</section>';
-    echo card_open('Phone region', 'every install, from its language setting') . bars($p['phone_regions'])
-        . '<p class="small muted" style="margin:10px 0 0">Covers guests too, but only says which country the phone is set up for.</p></section>';
+    echo card_open('Phone region', 'every install, from its time zone') . bars($p['phone_regions'])
+        . '<p class="small muted" style="margin:10px 0 0">Covers guests too. Worked out from the phone’s time zone (or its language when the time zone doesn’t say), so it’s the country, not the city.</p></section>';
     echo '</div></div>';
     return 'Places';
 }

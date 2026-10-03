@@ -754,7 +754,7 @@ class PlacesTab extends StatelessWidget {
               BarList(barRows(p.list('phone_regions'))),
               const SizedBox(height: 8),
               const Text(
-                'From each phone\'s language setting, so it covers guests too, but only says which country the phone is set up for.',
+                "From each phone's time zone (or its language when that doesn't say), so it covers guests too, but only gives the country.",
                 style: TextStyle(color: AppColors.muted, fontSize: 12),
               ),
             ],

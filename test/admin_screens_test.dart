@@ -78,7 +78,7 @@ void main() {
     expect(find.text('Listeners'), findsWidgets);
     await scrollAll(t);
     for (final tab in ['Listeners', 'Places', 'Messages', 'Updates']) {
-      await t.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text(tab)));
+      await t.tap(find.descendant(of: find.byType(TabBar), matching: find.text(tab)));
       await t.pumpAndSettle();
       await scrollAll(t);
     }

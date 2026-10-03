@@ -139,6 +139,27 @@ function rp_country_name(string $code): string
     return $code !== '' ? $code : 'Unknown';
 }
 
+/// A rough country for a phone, for every install (guests too). The time zone comes first: many
+/// phones in India are set to English (US) or (UK), so the language setting alone says the wrong
+/// country. The phone sends its time zone's short name ("IST") or an offset ("GMT+05:30").
+function rp_phone_country(string $tz, string $locale): string
+{
+    $tz = strtoupper(trim($tz));
+    $byName = ['IST' => 'India', 'PKT' => 'Pakistan', 'NPT' => 'Nepal', 'GST' => 'United Arab Emirates',
+        'SGT' => 'Singapore', 'MYT' => 'Malaysia', 'NZST' => 'New Zealand', 'NZDT' => 'New Zealand', 'AEST' => 'Australia', 'AEDT' => 'Australia',
+        'EST' => 'United States', 'EDT' => 'United States', 'CDT' => 'United States', 'MST' => 'United States',
+        'MDT' => 'United States', 'PST' => 'United States', 'PDT' => 'United States', 'JST' => 'Japan'];
+    $byOffset = ['+05:30' => 'India', '+05:45' => 'Nepal', '+05:00' => 'Pakistan', '+06:00' => 'Bangladesh', '+04:00' => 'United Arab Emirates',
+        '+03:00' => 'Saudi Arabia', '+08:00' => 'Singapore', '+12:00' => 'New Zealand', '+13:00' => 'New Zealand'];
+    if (isset($byName[$tz])) return $byName[$tz];
+    if (preg_match('/^(?:GMT|UTC)?([+-])(\d{1,2}):?(\d{2})$/', $tz, $m)) {
+        $off = $m[1] . str_pad($m[2], 2, '0', STR_PAD_LEFT) . ':' . $m[3];
+        if (isset($byOffset[$off])) return $byOffset[$off];
+    }
+    $cc = strtoupper((string)preg_replace('/^.*[_-]/', '', $locale));
+    return preg_match('/^[A-Z]{2}$/', $cc) ? rp_country_name($cc) : 'Unknown';
+}
+
 /// The last place each phone shared (opt-in), keyed by device id:
 /// [device_id => ['user_id', 'city', 'region', 'country']].
 function rp_device_places(PDO $pdo): array
@@ -580,11 +601,15 @@ function rp_places(PDO $pdo): array
     usort($cities, fn($a, $b) => [$b['accounts'], $b['phones'], $b['plays']] <=> [$a['accounts'], $a['phones'], $a['plays']]);
     usort($countries, fn($a, $b) => [$b['accounts'], $b['phones']] <=> [$a['accounts'], $a['phones']]);
 
-    $regions = [];
-    foreach (rp_rows($pdo, "SELECT UPPER(SUBSTRING_INDEX(REPLACE(locale, '-', '_'), '_', -1)) AS cc, COUNT(*) AS n, SUM(user_id IS NULL) AS guests
-                            FROM devices WHERE locale LIKE '%\\_%' OR locale LIKE '%-%' GROUP BY cc ORDER BY n DESC LIMIT 12") as $r) {
-        $regions[] = ['label' => rp_country_name((string)$r['cc']), 'n' => (int)$r['n'], 'guests' => (int)$r['guests']];
+    $counts = [];
+    foreach (rp_rows($pdo, 'SELECT timezone, locale, COUNT(*) AS n, SUM(user_id IS NULL) AS guests FROM devices GROUP BY timezone, locale') as $r) {
+        $country = rp_phone_country((string)$r['timezone'], (string)$r['locale']);
+        $counts[$country] ??= ['label' => $country, 'n' => 0, 'guests' => 0];
+        $counts[$country]['n'] += (int)$r['n'];
+        $counts[$country]['guests'] += (int)$r['guests'];
     }
+    usort($counts, fn($a, $b) => $b['n'] <=> $a['n']);
+    $regions = array_slice(array_values($counts), 0, 12);
     $accounts = (int)rp_scalar($pdo, 'SELECT COUNT(*) FROM users');
     $located = count(rp_user_places($pdo));
     return [

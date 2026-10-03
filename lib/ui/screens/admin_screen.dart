@@ -45,14 +45,18 @@ class AdminScreen extends StatefulWidget {
   State<AdminScreen> createState() => _AdminScreenState();
 }
 
-class _AdminScreenState extends State<AdminScreen> {
-  int _tab = 0;
+class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabs = TabController(length: 5, vsync: this)..addListener(() => setState(() {}));
   final _messages = GlobalKey<_MessagesTabState>();
 
-  static const _titles = ['Overview', 'Listeners', 'Places', 'Messages', 'App updates'];
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
 
   Future<void> _remind() async {
-    setState(() => _tab = 3);
+    _tabs.animateTo(3);
     final sent = await pushPage<bool>(context, const ComposePage(updateReminder: true));
     if (sent == true) _messages.currentState?.reload();
   }
@@ -62,9 +66,11 @@ class _AdminScreenState extends State<AdminScreen> {
     final admin = context.read<AdminService>();
     if (!admin.signedIn) return _SignIn(onDone: () => setState(() {}));
     final web = admin.webPanel;
+    // Sections are tabs under the title (not a bar at the bottom), so they never sit on top of the
+    // app's own dock.
     return Scaffold(
       appBar: AppBar(
-        title: Text(_titles[_tab]),
+        title: const Text('Samgeet admin'),
         actions: [
           PopupMenuButton<String>(
             onSelected: (v) async {
@@ -81,39 +87,30 @@ class _AdminScreenState extends State<AdminScreen> {
             ],
           ),
         ],
+        bottom: TabBar(
+          controller: _tabs,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          indicatorColor: AppColors.pink,
+          labelStyle: const TextStyle(fontWeight: FontWeight.w800),
+          unselectedLabelColor: AppColors.muted,
+          tabs: const [
+            Tab(icon: Icon(Icons.insights_rounded, size: 20), text: 'Overview', iconMargin: EdgeInsets.only(bottom: 2)),
+            Tab(icon: Icon(Icons.people_rounded, size: 20), text: 'Listeners', iconMargin: EdgeInsets.only(bottom: 2)),
+            Tab(icon: Icon(Icons.place_rounded, size: 20), text: 'Places', iconMargin: EdgeInsets.only(bottom: 2)),
+            Tab(icon: Icon(Icons.campaign_rounded, size: 20), text: 'Messages', iconMargin: EdgeInsets.only(bottom: 2)),
+            Tab(icon: Icon(Icons.system_update_rounded, size: 20), text: 'Updates', iconMargin: EdgeInsets.only(bottom: 2)),
+          ],
+        ),
       ),
       body: IndexedStack(
-        index: _tab,
+        index: _tabs.index,
         children: [
-          OverviewTab(goTo: (t) => setState(() => _tab = t)),
+          OverviewTab(goTo: _tabs.animateTo),
           const ListenersTab(),
           const PlacesTab(),
           _MessagesTab(key: _messages),
           UpdatesTab(onRemind: _remind, webPanel: web),
-        ],
-      ),
-      floatingActionButton: _tab == 3
-          ? FloatingActionButton.extended(
-              backgroundColor: AppColors.pink,
-              foregroundColor: Colors.white,
-              onPressed: () async {
-                final sent = await pushPage<bool>(context, const ComposePage());
-                if (sent == true) _messages.currentState?.reload();
-              },
-              icon: const Icon(Icons.edit_rounded),
-              label: const Text('New message', style: TextStyle(fontWeight: FontWeight.w800)),
-            )
-          : null,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.insights_outlined), selectedIcon: Icon(Icons.insights_rounded), label: 'Overview'),
-          NavigationDestination(icon: Icon(Icons.people_outline_rounded), selectedIcon: Icon(Icons.people_rounded), label: 'Listeners'),
-          NavigationDestination(icon: Icon(Icons.place_outlined), selectedIcon: Icon(Icons.place_rounded), label: 'Places'),
-          NavigationDestination(icon: Icon(Icons.campaign_outlined), selectedIcon: Icon(Icons.campaign_rounded), label: 'Messages'),
-          NavigationDestination(icon: Icon(Icons.system_update_outlined), selectedIcon: Icon(Icons.system_update_rounded), label: 'Updates'),
         ],
       ),
     );
@@ -579,6 +576,16 @@ class _MessagesTabState extends State<_MessagesTab> with AutomaticKeepAliveClien
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
           children: [
+            GradientButton(
+              label: 'New message',
+              icon: Icons.edit_rounded,
+              expand: true,
+              onTap: () async {
+                final sent = await pushPage<bool>(context, const ComposePage());
+                if (sent == true) reload();
+              },
+            ),
+            const SizedBox(height: 12),
             if (_reminder.i('behind') > 0) ...[
               GlassBox(
                 radius: 20,
